@@ -27,6 +27,18 @@ app = FastAPI(
     description="Receives OT/IIoT protocol telemetry from edge sensors.",
 )
 
+# DEV-ONLY: wide-open CORS so the static dashboard (served from a different
+# origin/port) can call this API directly. Before any real deployment this
+# must be locked down to the actual dashboard's origin -- flagged here
+# explicitly, same as the JWT-verification gap noted earlier.
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 KAFKA_BOOTSTRAP_SERVERS = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 KEYCLOAK_ISSUER_URL = os.environ["KEYCLOAK_ISSUER_URL"]
 PROTOCOL_EVENTS_TOPIC = "protocol-events"
@@ -177,6 +189,25 @@ async def register_sensor(req: RegisterSensorRequest, _: dict = Depends(verify_u
 
     sensor_id = await db_register_sensor(req.site_id, req.label, req.mtls_cert_fingerprint)
     return RegisterSensorResponse(sensor_id=sensor_id, status="provisioned")
+
+
+@app.get("/v1/sites/{site_id}/assets")
+async def list_assets(site_id: UUID):
+    # NOTE: no auth check yet -- same known, flagged gap as verify_user_jwt
+    # elsewhere in this file. Must be locked down (require verify_user_jwt
+    # AND check the user's tenant owns this site) before any real deployment.
+    from db import list_assets_for_site
+
+    assets = await list_assets_for_site(site_id)
+    return {"site_id": str(site_id), "assets": assets}
+
+
+@app.get("/v1/sites/{site_id}/alerts")
+async def list_alerts(site_id: UUID):
+    from db import list_alerts_for_site
+
+    alerts = await list_alerts_for_site(site_id)
+    return {"site_id": str(site_id), "alerts": alerts}
 
 
 @app.get("/healthz")

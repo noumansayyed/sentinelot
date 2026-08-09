@@ -78,3 +78,24 @@ async def site_exists(site_id: UUID) -> bool:
     pool = await get_pool()
     row = await pool.fetchrow("SELECT 1 FROM sites WHERE id = $1", site_id)
     return row is not None
+
+
+async def list_assets_for_site(site_id: UUID) -> list[dict]:
+    pool = await get_pool()
+    rows = await pool.fetch(
+        """SELECT id, ip_address, mac_address, device_role, protocols,
+                  criticality, first_seen, last_seen
+           FROM assets WHERE site_id = $1 ORDER BY last_seen DESC""",
+        site_id,
+    )
+    return [dict(r) for r in rows]
+
+
+async def list_alerts_for_site(site_id: UUID) -> list[dict]:
+    pool = await get_pool()
+    rows = await pool.fetch(
+        """SELECT id, time, severity, description, status
+           FROM alerts WHERE site_id = $1 ORDER BY time DESC LIMIT 200""",
+        site_id,
+    )
+    return [dict(r) for r in rows]
