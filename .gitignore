@@ -1,3 +1,8 @@
 .env
 __pycache__/
 *.pyc
+*.bak
+zeek-lab/logs/
+zeek-lab/combined/logs/
+__pycache__/
+*.pyc
