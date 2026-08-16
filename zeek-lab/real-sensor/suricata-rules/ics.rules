@@ -1,0 +1,5 @@
+# SentinelOT custom ICS detection rules
+# Modbus function code 0x06 = Write Single Register.
+# Byte offset 7 in the TCP payload is the function code, per the
+# Modbus Application Protocol spec (MBAP header is 7 bytes).
+alert tcp any any -> any 502 (msg:"SentinelOT: Modbus WRITE SINGLE REGISTER command observed"; content:"|06|"; offset:7; depth:1; flow:to_server; sid:1000001; rev:1;)

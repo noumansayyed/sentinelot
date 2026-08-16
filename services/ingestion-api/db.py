@@ -99,3 +99,29 @@ async def list_alerts_for_site(site_id: UUID) -> list[dict]:
         site_id,
     )
     return [dict(r) for r in rows]
+
+
+async def get_asset_id_by_ip(site_id: UUID, ip_address: str) -> Optional[UUID]:
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        "SELECT id FROM assets WHERE site_id = $1 AND ip_address = $2",
+        site_id, ip_address,
+    )
+    return row["id"] if row else None
+
+
+async def get_tenant_id_for_site(site_id: UUID) -> Optional[UUID]:
+    pool = await get_pool()
+    row = await pool.fetchrow("SELECT tenant_id FROM sites WHERE id = $1", site_id)
+    return row["tenant_id"] if row else None
+
+
+async def insert_signature_alert(
+    tenant_id: UUID, site_id: UUID, asset_id: UUID, severity: str, description: str
+) -> None:
+    pool = await get_pool()
+    await pool.execute(
+        """INSERT INTO alerts (tenant_id, site_id, asset_id, severity, description)
+           VALUES ($1, $2, $3, $4, $5)""",
+        tenant_id, site_id, asset_id, severity, description,
+    )

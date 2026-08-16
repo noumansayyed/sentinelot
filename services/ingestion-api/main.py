@@ -213,3 +213,52 @@ async def list_alerts(site_id: UUID):
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+class SignatureAlert(BaseModel):
+    timestamp: datetime
+    src_ip: str
+    dst_ip: str
+    signature: str
+    severity: Literal["low", "medium", "high", "critical"]
+
+
+class SignatureAlertBatch(BaseModel):
+    sensor_id: UUID
+    site_id: UUID
+    alerts: list[SignatureAlert] = Field(..., max_length=1000)
+
+
+@app.post("/v1/ingest/signature-alerts", status_code=202)
+async def ingest_signature_alerts(
+    batch: SignatureAlertBatch,
+    sensor_id: UUID = Depends(verify_sensor),
+):
+    if batch.sensor_id != sensor_id:
+        raise HTTPException(
+            status_code=403,
+            detail="sensor_id in payload does not match authenticated certificate",
+        )
+
+    from db import get_asset_id_by_ip, get_tenant_id_for_site, insert_signature_alert
+
+    tenant_id = await get_tenant_id_for_site(batch.site_id)
+    if tenant_id is None:
+        raise HTTPException(status_code=404, detail="site not found")
+
+    accepted, skipped = 0, 0
+    for alert in batch.alerts:
+        # Link to the existing asset discovered via Zeek's protocol parsing --
+        # if it hasn't been seen yet by that path, skip rather than guess.
+        asset_id = await get_asset_id_by_ip(batch.site_id, alert.src_ip)
+        if asset_id is None:
+            skipped += 1
+            continue
+        await insert_signature_alert(
+            tenant_id, batch.site_id, asset_id, alert.severity,
+            f"[Suricata signature match] {alert.signature}: {alert.src_ip} -> {alert.dst_ip}",
+        )
+        accepted += 1
+
+    logger.info("signature-alerts sensor=%s accepted=%d skipped=%d", sensor_id, accepted, skipped)
+    return {"accepted": accepted, "skipped": skipped}
