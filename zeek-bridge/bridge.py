@@ -11,7 +11,7 @@ import json
 import time
 import requests
 
-LOG_PATH = "/home/dev/sentinelot/zeek-lab/real-sensor/logs/modbus.log"
+LOG_PATH = "/home/dev/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log"
 INGEST_URL = "http://localhost:8000/v1/ingest/events"
 SENSOR_ID = "33333333-3333-3333-3333-333333333333"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
