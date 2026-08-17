@@ -6,9 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN zkg autoconfig --force
 RUN zkg install --force zeek/cisagov/icsnpp-modbus
+RUN zkg install --force zeek/cisagov/icsnpp-s7comm
 
 RUN echo 'redef LogAscii::use_json = T;' >> /usr/local/zeek/share/zeek/site/local.zeek \
-    && echo '@load icsnpp-modbus' >> /usr/local/zeek/share/zeek/site/local.zeek
+    && echo '@load icsnpp-modbus' >> /usr/local/zeek/share/zeek/site/local.zeek \
+    && echo '@load icsnpp-s7comm' >> /usr/local/zeek/share/zeek/site/local.zeek
 
 RUN mkdir -p /logs/zeek /logs/suricata /var/lib/suricata/rules
 COPY suricata-rules/ics.rules /var/lib/suricata/rules/suricata.rules
