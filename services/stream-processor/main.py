@@ -2,13 +2,15 @@
 SentinelOT — Stream Processor
 Consumes normalized protocol events from Kafka/Redpanda, upserts the
 asset inventory, persists events to TimescaleDB, and runs rule-based
-detections: "new device seen", "off-hours activity", and "unauthorized
-write" (a device writing for the first time -- more severe if off-hours).
+detections: "new device seen", "off-hours activity", "unauthorized
+write", and behavioral baselining (per-device timing anomaly via
+Welford's online algorithm + z-score).
 """
 
 import asyncio
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -22,6 +24,15 @@ logger = logging.getLogger("sentinelot.stream_processor")
 KAFKA_BOOTSTRAP_SERVERS = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 DATABASE_URL = os.environ["DATABASE_URL"]
 TOPIC = "protocol-events"
+
+# Minimum samples before we trust a device's baseline enough to alert on
+# it -- avoids false positives from a device's first few, still-settling
+# observations.
+BASELINE_MIN_SAMPLES = 10
+# How many standard deviations from a device's own normal timing counts
+# as a genuine anomaly. 3 is the conventional statistical threshold for
+# "significant deviation" (Chebyshev/normal-distribution heuristic).
+ZSCORE_THRESHOLD = 3.0
 
 
 async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str) -> tuple[UUID, bool]:
@@ -80,6 +91,60 @@ async def has_prior_write(pool: asyncpg.Pool, site_id: UUID, asset_id: UUID) -> 
     )
 
 
+async def update_baseline_and_check(
+    pool: asyncpg.Pool, asset_id: UUID, ts: datetime,
+) -> tuple[bool, float, float]:
+    """
+    Welford's online algorithm: updates a device's running mean/variance
+    of inter-event timing with a single pass, no stored history needed.
+    Returns (is_anomaly, gap_seconds, zscore) for the caller to decide
+    whether to alert. On a device's first-ever event there's no prior
+    timestamp to compare, so no gap is computed that round.
+    """
+    row = await pool.fetchrow(
+        """SELECT baseline_mean_interval, baseline_m2, baseline_count, last_event_at
+           FROM assets WHERE id = $1""",
+        asset_id,
+    )
+    mean, m2, count, last_event_at = (
+        row["baseline_mean_interval"], row["baseline_m2"],
+        row["baseline_count"], row["last_event_at"],
+    )
+
+    if last_event_at is None:
+        await pool.execute("UPDATE assets SET last_event_at = $1 WHERE id = $2", ts, asset_id)
+        return False, 0.0, 0.0
+
+    gap = (ts - last_event_at).total_seconds()
+    if gap < 0:
+        # Out-of-order event delivery (network/Kafka reordering) -- skip
+        # rather than corrupt the running statistics with a negative gap.
+        return False, gap, 0.0
+
+    count += 1
+    if mean is None:
+        mean, m2 = gap, 0.0
+    else:
+        delta = gap - mean
+        mean += delta / count
+        m2 += delta * (gap - mean)
+
+    variance = m2 / count if count > 1 else 0.0
+    stddev = math.sqrt(variance)
+    zscore = (gap - mean) / stddev if stddev > 0 else 0.0
+
+    await pool.execute(
+        """UPDATE assets
+           SET baseline_mean_interval = $1, baseline_m2 = $2,
+               baseline_count = $3, last_event_at = $4
+           WHERE id = $5""",
+        mean, m2, count, ts, asset_id,
+    )
+
+    is_anomaly = count > BASELINE_MIN_SAMPLES and abs(zscore) > ZSCORE_THRESHOLD
+    return is_anomaly, gap, zscore
+
+
 async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, event: dict) -> None:
     src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"])
     dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"])
@@ -96,6 +161,8 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
     elif is_write and is_new:
         # a brand-new device whose very first observed action is a write
         first_ever_write = True
+
+    baseline_anomaly, gap_seconds, zscore = await update_baseline_and_check(pool, src_asset_id, ts)
 
     await pool.execute(
         """INSERT INTO protocol_events
@@ -130,6 +197,14 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             f"Unauthorized write command detected: {event['src_ip']} sent {function_code} "
             f"to {event['dst_ip']} -- this device has only been observed reading until now"
             f"{off_hours_note}.",
+        )
+
+    if baseline_anomaly:
+        await insert_alert(
+            pool, tenant_id, site_id, src_asset_id, "medium",
+            f"Behavioral anomaly: {event['src_ip']} request timing deviates sharply from its "
+            f"own established baseline (gap={gap_seconds:.2f}s, z-score={zscore:.1f}, "
+            f"threshold={ZSCORE_THRESHOLD}).",
         )
 
 

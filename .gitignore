@@ -7,3 +7,4 @@ zeek-lab/combined/logs/
 __pycache__/
 *.pyc
 zeek-lab/real-sensor/logs/
+*.bak*

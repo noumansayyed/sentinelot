@@ -47,6 +47,13 @@ CREATE TABLE assets (
     criticality     TEXT NOT NULL DEFAULT 'unclassified' CHECK (criticality IN ('critical', 'high', 'medium', 'low', 'unclassified')),
     first_seen      TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Running per-device timing statistics (Welford's online algorithm),
+    -- used for behavioral baselining: flags deviations from a device's
+    -- own normal request rhythm rather than a fixed global threshold.
+    baseline_mean_interval  DOUBLE PRECISION,
+    baseline_m2             DOUBLE PRECISION DEFAULT 0,
+    baseline_count          INTEGER NOT NULL DEFAULT 0,
+    last_event_at           TIMESTAMPTZ,
     UNIQUE (site_id, mac_address)
 );
 
