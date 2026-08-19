@@ -105,6 +105,7 @@ CREATE TABLE alerts (
     description     TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved', 'false_positive')),
     evidence        JSONB,
+    llm_explanation TEXT,
     PRIMARY KEY (id, time)
 );
 
