@@ -1,0 +1,102 @@
+
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SentinelOT Compliance Report</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; color: #1a1a1a; }
+h1 { border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
+h2 { color: #2563eb; margin-top: 32px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
+th { background: #f0f4ff; }
+.severity-critical { color: #b91c1c; font-weight: bold; }
+.severity-high { color: #c2410c; font-weight: bold; }
+.severity-medium { color: #a16207; }
+.disclaimer { background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 13px; margin-top: 24px; }
+</style></head><body>
+
+<h1>SentinelOT OT Security Monitoring Report</h1>
+<p><strong>Site:</strong> Pune Pilot Plant &nbsp; | &nbsp;
+<strong>Period:</strong> 2026-08-31 to 2026-08-31 &nbsp; | &nbsp;
+<strong>Generated:</strong> 2026-08-31 18:21 UTC</p>
+
+<h2>1. Monitored Asset Inventory</h2>
+<p>4 device(s) passively discovered on the OT network during this period.</p>
+<table>
+<tr><th>IP Address</th><th>Role</th><th>Protocols</th><th>Criticality</th><th>First Seen</th><th>Last Seen</th></tr>
+
+<tr><td>172.28.240.212</td><td>unknown</td><td>n/a</td>
+<td>unclassified</td><td>2026-08-16 13:00</td><td>2026-08-18 09:36</td></tr>
+
+<tr><td>172.28.240.211</td><td>unknown</td><td>n/a</td>
+<td>unclassified</td><td>2026-08-16 13:00</td><td>2026-08-18 09:36</td></tr>
+
+<tr><td>172.28.240.213</td><td>unknown</td><td>n/a</td>
+<td>unclassified</td><td>2026-08-16 13:00</td><td>2026-08-18 09:36</td></tr>
+
+<tr><td>172.28.240.217</td><td>unknown</td><td>n/a</td>
+<td>unclassified</td><td>2026-08-17 06:50</td><td>2026-08-18 09:36</td></tr>
+
+</table>
+
+<h2>2. Security Alerts Summary</h2>
+<p>10 alert(s) recorded during this period.</p>
+<table>
+<tr><th>Time</th><th>Severity</th><th>Description</th><th>Plain-Language Explanation</th><th>Status</th></tr>
+
+<tr><td>2026-08-18 09:33</td><td class="severity-medium">MEDIUM</td>
+<td>Behavioral anomaly (Welford): 172.28.240.212 request timing deviates sharply from its own established baseline (gap=75243.00s, z-score=5.2, threshold=3.0).</td><td>The machine at the plant 172.28.240.212 has been sending messages much more quickly than usual. This change is significant because it deviates from its normal routine, which could indicate something unexpected or problematic is happening. The system's analysis shows this behavior is unusual and should be monitored closely.</td><td>open</td></tr>
+
+<tr><td>2026-08-18 09:33</td><td class="severity-medium">MEDIUM</td>
+<td>Behavioral anomaly (Welford): 172.28.240.217 request timing deviates sharply from its own established baseline (gap=75240.00s, z-score=9.0, threshold=3.0).</td><td>A machine at the factory requests external access to the internet more frequently than usual, which is unusual and raises concerns. This deviation is 75240 times greater than its normal pattern, showing a significant shift from its baseline. The threshold is set at 3.0, indicating a high level of concern. 
+
+This could indicate a possible unauthorized access attempt or an anomaly in the system, potentially leading to security risks. It's crucial to investigate the request and ensure that all external connections are legitimate.</td><td>open</td></tr>
+
+<tr><td>2026-08-17 12:39</td><td class="severity-medium">MEDIUM</td>
+<td>Behavioral anomaly: 172.28.240.212 request timing deviates sharply from its own established baseline (gap=461.00s, z-score=3.9, threshold=3.0).</td><td>A factory server's request timing deviates significantly from its normal pattern, causing a gap of 461 seconds compared to its established baseline. This unusual behavior could indicate a potential security threat or system malfunction. The recommended action is to investigate and possibly secure the server to ensure its integrity and security.</td><td>open</td></tr>
+
+<tr><td>2026-08-17 12:39</td><td class="severity-medium">MEDIUM</td>
+<td>Behavioral anomaly: 172.28.240.217 request timing deviates sharply from its own established baseline (gap=459.00s, z-score=6.7, threshold=3.0).</td><td>This factory plant operator might notice a specific computer (172.28.240.217) on their network requests timing out in a way that deviates significantly from its usual behavior. This deviation is 459 seconds out of place and has a high z-score of 6.7, which is higher than the usual threshold of 3.0. This suggests the request timing is abnormal and could indicate potential security issues that require attention. A clear recommended action would be to investigate this network request and ensure that the request timing is within normal parameters to maintain network security and prevent any unauthorized or suspicious activity.</td><td>open</td></tr>
+
+<tr><td>2026-08-17 06:50</td><td class="severity-medium">MEDIUM</td>
+<td>New device seen on network: 172.28.240.217 (modbus_tcp)</td><td>A new device was connected to the factory's network using a specific method. This isn't normal, and it's a potential security risk. The recommended action is to check the device and ensure it's authorized before using it on the network. This helps prevent unauthorized access and protects the factory's data from being compromised.</td><td>open</td></tr>
+
+<tr><td>2026-08-16 18:47</td><td class="severity-medium">MEDIUM</td>
+<td>[Suricata signature match] SentinelOT: Modbus WRITE SINGLE REGISTER command observed: 172.28.240.213 -> 172.28.240.211</td><td>A security alert from the factory plant network detected unauthorized access to a Modbus communication endpoint. The source IP address is 172.28.240.213, and the target IP address is 172.28.240.211. This indicates that the plant's Modbus communication has been compromised, potentially allowing for unauthorized modifications of data, which could have significant security and operational implications. The recommended action is to investigate this incident and monitor Modbus traffic for further unauthorized activities.</td><td>open</td></tr>
+
+<tr><td>2026-08-16 18:47</td><td class="severity-medium">MEDIUM</td>
+<td>[Suricata signature match] SentinelOT: Modbus WRITE SINGLE REGISTER command observed: 172.28.240.213 -> 172.28.240.211</td><td>A device on the factory network sent a Modbus command to change a value at a remote machine, which was detected. This is a security concern because Modbus is a common protocol used in many industrial control systems, and unauthorized access could lead to disruptions or potential hazards. The recommended action is to check the network and systems for any unauthorized Modbus activity.</td><td>open</td></tr>
+
+<tr><td>2026-08-16 13:00</td><td class="severity-high">HIGH</td>
+<td>Unauthorized write command detected: 172.28.240.213 sent WRITE_SINGLE_REGISTER to 172.28.240.211 -- this device has only been observed reading until now.</td><td>A security alert indicates that unauthorized changes were made to a device in the factory network. This could potentially compromise the security of sensitive information. The affected device has been acting as a reader only, but it appears someone has tried to change some data. This is concerning and suggests that the factory network needs a security review to prevent unauthorized changes.</td><td>open</td></tr>
+
+<tr><td>2026-08-16 13:00</td><td class="severity-medium">MEDIUM</td>
+<td>New device seen on network: 172.28.240.213 (modbus_tcp)</td><td>A new device was detected on the factory's network using the Modbus TCP protocol. This could potentially pose a security risk if not properly managed. The recommended action is to review and secure the network access for this device.</td><td>open</td></tr>
+
+<tr><td>2026-08-16 13:00</td><td class="severity-medium">MEDIUM</td>
+<td>New device seen on network: 172.28.240.212 (modbus_tcp)</td><td>A new device with IP address 172.28.240.212 was detected on the network using modbus_tcp. This could be a security risk if it is part of an unauthorized network connection. The recommended action is to investigate this device and ensure it is properly secured and monitored.</td><td>open</td></tr>
+
+</table>
+
+<h2>3. Severity Breakdown</h2>
+<table>
+<tr><th>Severity</th><th>Count</th></tr>
+
+<tr><td>MEDIUM</td><td>9</td></tr>
+
+<tr><td>HIGH</td><td>1</td></tr>
+
+</table>
+
+<h2>4. Monitoring Coverage</h2>
+<p>Passive, non-intrusive network monitoring active throughout the reporting period, covering: modbus_tcp, s7comm.
+No active scanning or intrusive probing was performed on any monitored device.</p>
+
+<div class="disclaimer">
+<strong>Scope note:</strong> This report documents OT network monitoring activity and security events
+for internal review and audit-support purposes, referencing categories aligned with CERT-In's
+cybersecurity incident reporting guidelines and DPDPA's breach-notification relevance where applicable.
+It is generated by an automated monitoring system and is intended to support -- not replace --
+a plant's formal compliance and audit processes.
+</div>
+
+</body></html>

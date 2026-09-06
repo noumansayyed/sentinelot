@@ -35,23 +35,27 @@ BASELINE_MIN_SAMPLES = 10
 ZSCORE_THRESHOLD = 3.0
 
 
-async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str) -> tuple[UUID, bool]:
+async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str, protocol: str) -> tuple[UUID, bool]:
     row = await pool.fetchrow(
         "SELECT id FROM assets WHERE site_id = $1 AND ip_address = $2",
         site_id, ip,
     )
     if row is not None:
         await pool.execute(
-            "UPDATE assets SET last_seen = now() WHERE id = $1", row["id"]
+            """UPDATE assets SET last_seen = now(),
+                   protocols = CASE WHEN $2 = ANY(protocols) THEN protocols
+                                     ELSE array_append(protocols, $2) END
+               WHERE id = $1""",
+            row["id"], protocol,
         )
         return row["id"], False
 
     new_id = uuid4()
     await pool.execute(
         """INSERT INTO assets (id, site_id, ip_address, device_role, protocols)
-           VALUES ($1, $2, $3, 'unknown', ARRAY[]::TEXT[])
+           VALUES ($1, $2, $3, 'unknown', ARRAY[$4]::TEXT[])
            ON CONFLICT DO NOTHING""",
-        new_id, site_id, ip,
+        new_id, site_id, ip, protocol,
     )
     return new_id, True
 
@@ -146,8 +150,8 @@ async def update_baseline_and_check(
 
 
 async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, event: dict) -> None:
-    src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"])
-    dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"])
+    src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"], event["protocol"])
+    dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"], event["protocol"])
 
     ts = datetime.fromisoformat(event["timestamp"])
     function_code = event.get("function_code")
