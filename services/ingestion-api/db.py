@@ -94,7 +94,7 @@ async def list_assets_for_site(site_id: UUID) -> list[dict]:
 async def list_alerts_for_site(site_id: UUID) -> list[dict]:
     pool = await get_pool()
     rows = await pool.fetch(
-        """SELECT id, time, severity, description, status
+        """SELECT id, time, severity, description, status, llm_explanation
            FROM alerts WHERE site_id = $1 ORDER BY time DESC LIMIT 200""",
         site_id,
     )

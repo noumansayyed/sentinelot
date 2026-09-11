@@ -28,7 +28,7 @@
   <div class="panel">
     <h2>Recent Alerts</h2>
     <table id="alerts-table">
-      <thead><tr><th>Time</th><th>Severity</th><th>Description</th><th>Status</th></tr></thead>
+      <thead><tr><th>Time</th><th>Severity</th><th>Description</th><th>Explanation</th><th>Status</th></tr></thead>
       <tbody id="alerts-body"></tbody>
     </table>
     <div id="alerts-empty" class="empty" style="display:none;">No alerts yet.</div>
@@ -43,7 +43,7 @@
     <div id="assets-empty" class="empty" style="display:none;">No devices discovered yet.</div>
   </div>
 
-  <div class="refresh-note">Auto-refreshes every 5 seconds.</div>
+  <div class="refresh-note">Auto-refreshes every 5 seconds. &nbsp;|&nbsp; <a href="../reports/compliance_report.html" style="color:#5ea8ff;" target="_blank">View Compliance Report</a></div>
 
 <script>
 // Edit these two constants if your API or site changes.
@@ -71,6 +71,7 @@ async function loadAlerts() {
       <td>${fmtTime(a.time)}</td>
       <td><span class="severity severity-${a.severity}">${a.severity}</span></td>
       <td>${a.description}</td>
+      <td>${a.llm_explanation ?? "<em>pending...</em>"}</td>
       <td>${a.status}</td>
     `;
     body.appendChild(tr);
