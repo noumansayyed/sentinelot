@@ -49,13 +49,27 @@
 // Edit these two constants if your API or site changes.
 const API_BASE = "http://localhost:8000";
 const SITE_ID = "22222222-2222-2222-2222-222222222222";
+const KEYCLOAK_URL = "http://localhost:8080";
+// Dev-only hardcoded credentials for this lab dashboard. A real deployment
+// would use a proper login flow (Keycloak's hosted login page), not this.
+let authToken = null;
+
+async function getToken() {
+  const res = await fetch(`${KEYCLOAK_URL}/realms/sentinelot/protocol/openid-connect/token`, {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: "client_id=sentinelot-dashboard&grant_type=password&username=operator&password=operator123",
+  });
+  const data = await res.json();
+  authToken = data.access_token;
+}
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleString();
 }
 
 async function loadAlerts() {
-  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/alerts`);
+  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/alerts`, {headers: {"Authorization": `Bearer ${authToken}`}});
   const data = await res.json();
   const body = document.getElementById("alerts-body");
   const empty = document.getElementById("alerts-empty");
@@ -79,7 +93,7 @@ async function loadAlerts() {
 }
 
 async function loadAssets() {
-  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/assets`);
+  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/assets`, {headers: {"Authorization": `Bearer ${authToken}`}});
   const data = await res.json();
   const body = document.getElementById("assets-body");
   const empty = document.getElementById("assets-empty");
@@ -103,6 +117,7 @@ async function loadAssets() {
 }
 
 async function refresh() {
+  if (!authToken) { await getToken(); }
   document.getElementById("subtitle").textContent = "Pune Pilot Plant — last updated " + new Date().toLocaleTimeString();
   try {
     await Promise.all([loadAlerts(), loadAssets()]);

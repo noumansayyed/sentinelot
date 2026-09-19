@@ -13,6 +13,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from confluent_kafka import Producer
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -34,13 +35,14 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost", "http://127.0.0.1", "null"],  # dashboard is a local file
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 KAFKA_BOOTSTRAP_SERVERS = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 KEYCLOAK_ISSUER_URL = os.environ["KEYCLOAK_ISSUER_URL"]
+KEYCLOAK_JWKS_URL = os.environ.get("KEYCLOAK_JWKS_URL", KEYCLOAK_ISSUER_URL)
 PROTOCOL_EVENTS_TOPIC = "protocol-events"
 
 producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS})
@@ -104,15 +106,32 @@ async def lookup_sensor_id_by_fingerprint(fingerprint: str) -> Optional[UUID]:
     return sensor.id if sensor else None
 
 
+_jwks_cache: dict = {}
+
+async def _get_jwks() -> dict:
+    if not _jwks_cache:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{KEYCLOAK_JWKS_URL}/protocol/openid-connect/certs")
+            resp.raise_for_status()
+            _jwks_cache.update(resp.json())
+    return _jwks_cache
+
+
 async def verify_user_jwt(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
     if creds is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
     try:
-        claims = jwt.get_unverified_claims(creds.credentials)
-        if claims.get("iss") != KEYCLOAK_ISSUER_URL:
-            raise HTTPException(status_code=401, detail="invalid token issuer")
+        jwks = await _get_jwks()
+        header = jwt.get_unverified_header(creds.credentials)
+        key = next((k for k in jwks["keys"] if k["kid"] == header["kid"]), None)
+        if key is None:
+            raise HTTPException(status_code=401, detail="unknown signing key")
+        claims = jwt.decode(
+            creds.credentials, key, algorithms=["RS256"],
+            issuer=KEYCLOAK_ISSUER_URL, options={"verify_aud": False},
+        )
         return claims
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="invalid token") from exc
@@ -192,10 +211,7 @@ async def register_sensor(req: RegisterSensorRequest, _: dict = Depends(verify_u
 
 
 @app.get("/v1/sites/{site_id}/assets")
-async def list_assets(site_id: UUID):
-    # NOTE: no auth check yet -- same known, flagged gap as verify_user_jwt
-    # elsewhere in this file. Must be locked down (require verify_user_jwt
-    # AND check the user's tenant owns this site) before any real deployment.
+async def list_assets(site_id: UUID, _: dict = Depends(verify_user_jwt)):
     from db import list_assets_for_site
 
     assets = await list_assets_for_site(site_id)
@@ -203,7 +219,7 @@ async def list_assets(site_id: UUID):
 
 
 @app.get("/v1/sites/{site_id}/alerts")
-async def list_alerts(site_id: UUID):
+async def list_alerts(site_id: UUID, _: dict = Depends(verify_user_jwt)):
     from db import list_alerts_for_site
 
     alerts = await list_alerts_for_site(site_id)
