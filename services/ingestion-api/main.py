@@ -35,7 +35,7 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://127.0.0.1", "null"],  # dashboard is a local file
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "null"],  # dashboard is a local file
     allow_methods=["*"],
     allow_headers=["*"],
 )
