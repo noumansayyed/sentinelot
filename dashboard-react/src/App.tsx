@@ -11,7 +11,7 @@ export default function App() {
   });
 
   return (
-    <div style={{ fontFamily: "-apple-system, Segoe UI, Roboto, sans-serif", color: "#e6e6e6", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ fontFamily: "-apple-system, Segoe UI, Roboto, sans-serif", color: "#e6e6e6", padding: 24, maxWidth: 1600, margin: "0 auto" }}>
       <h1 style={{ fontSize: 20, marginBottom: 4 }}>SentinelOT</h1>
       <div style={{ color: "#8a8f98", fontSize: 13, marginBottom: 20 }}>Pune Pilot Plant — OT Security Monitoring</div>
       <div style={{ marginBottom: 20 }}>
