@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 zeek-lab/real-sensor/logs/
 *.bak*
+validation/output/
