@@ -4,22 +4,37 @@ import HistoryView from "./HistoryView";
 
 export default function App() {
   const [tab, setTab] = useState<"live" | "history">("live");
-  const btnStyle = (active: boolean) => ({
-    padding: "8px 16px", borderRadius: 6, border: "1px solid #262b36",
-    background: active ? "#2563eb" : "#171a21", color: "#e6e6e6",
-    cursor: "pointer", fontSize: 13, marginRight: 8,
-  });
+  const navItem = (id: "live" | "history", label: string) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        tab === id ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div style={{ fontFamily: "-apple-system, Segoe UI, Roboto, sans-serif", color: "#e6e6e6", padding: 24, maxWidth: 1600, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>SentinelOT</h1>
-      <div style={{ color: "#8a8f98", fontSize: 13, marginBottom: 20 }}>Pune Pilot Plant — OT Security Monitoring</div>
-      <div style={{ marginBottom: 20 }}>
-        <button style={btnStyle(tab === "live")} onClick={() => setTab("live")}>Live Monitoring</button>
-        <button style={btnStyle(tab === "history")} onClick={() => setTab("history")}>History &amp; Trends</button>
-        <a href="/reports/compliance_report.html" target="_blank" style={{ color: "#5ea8ff", fontSize: 13, marginLeft: 8 }}>View Compliance Report ↗</a>
-      </div>
-      {tab === "live" ? <LiveView /> : <HistoryView />}
+    <div className="flex min-h-screen bg-[#0a0b0d] text-slate-100">
+      <aside className="w-56 shrink-0 border-r border-slate-800 p-4 flex flex-col gap-1">
+        <div className="px-2 py-3 mb-2">
+          <div className="text-lg font-bold">SentinelOT</div>
+          <div className="text-xs text-slate-500">Pune Pilot Plant</div>
+        </div>
+        {navItem("live", "Live Monitoring")}
+        {navItem("history", "History & Trends")}
+        <a href="/reports/compliance_report.html" target="_blank"
+          className="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
+          Compliance Report ↗
+        </a>
+        <div className="mt-auto px-2 py-3 text-xs text-slate-600 border-t border-slate-800 pt-4">
+          OT/IIoT Passive Monitoring<br />4 protocols · dual-engine detection
+        </div>
+      </aside>
+      <main className="flex-1 p-6 overflow-x-hidden">
+        {tab === "live" ? <LiveView /> : <HistoryView />}
+      </main>
     </div>
   );
 }
