@@ -125,3 +125,11 @@ async def insert_signature_alert(
            VALUES ($1, $2, $3, $4, $5)""",
         tenant_id, site_id, asset_id, severity, description,
     )
+
+
+async def update_alert_status(alert_id: str, new_status: str) -> bool:
+    pool = await get_pool()
+    result = await pool.execute(
+        "UPDATE alerts SET status = $1 WHERE id = $2", new_status, alert_id
+    )
+    return result != "UPDATE 0"

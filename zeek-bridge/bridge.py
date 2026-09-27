@@ -12,7 +12,7 @@ import time
 import requests
 
 LOG_PATH = "/home/dev/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log"
-INGEST_URL = "http://localhost:8000/v1/ingest/events"
+INGEST_URL = "http://sentinelot-ingestion-api-1:8000/v1/ingest/events"
 SENSOR_ID = "33333333-3333-3333-3333-333333333333"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 FINGERPRINT = "dev-test-fingerprint-000"

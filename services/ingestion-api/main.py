@@ -278,3 +278,19 @@ async def ingest_signature_alerts(
 
     logger.info("signature-alerts sensor=%s accepted=%d skipped=%d", sensor_id, accepted, skipped)
     return {"accepted": accepted, "skipped": skipped}
+
+
+class UpdateAlertStatusRequest(BaseModel):
+    status: Literal["open", "acknowledged", "resolved", "false_positive"]
+
+
+@app.patch("/v1/alerts/{alert_id}")
+async def update_alert_status(
+    alert_id: UUID, req: UpdateAlertStatusRequest, _: dict = Depends(verify_user_jwt)
+):
+    from db import update_alert_status as db_update_alert_status
+
+    updated = await db_update_alert_status(str(alert_id), req.status)
+    if not updated:
+        raise HTTPException(status_code=404, detail="alert not found")
+    return {"id": str(alert_id), "status": req.status}

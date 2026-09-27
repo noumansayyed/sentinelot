@@ -35,3 +35,12 @@ export async function fetchAssets(): Promise<Asset[]> {
   const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/assets`, { headers: { Authorization: `Bearer ${t}` } });
   return (await res.json()).assets;
 }
+
+export async function acknowledgeAlert(id: string, status: "acknowledged" | "resolved" | "false_positive") {
+  const t = await getToken();
+  await fetch(`${API_BASE}/v1/alerts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ status }),
+  });
+}
