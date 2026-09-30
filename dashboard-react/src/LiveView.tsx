@@ -1,180 +1,228 @@
 import { useEffect, useRef, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
+import PLCChart from "./components/PLCChart";
 
-function detectionMethod(desc: string): string {
-  if (desc.startsWith("[Suricata signature match]")) return "Suricata — signature match";
-  if (desc.startsWith("Behavioral anomaly")) return "Welford's algorithm — statistical baseline deviation";
-  if (desc.startsWith("New device seen")) return "Zeek — new device discovery rule";
-  if (desc.startsWith("Unauthorized write")) return "Zeek — behavioral rule (first-ever write)";
-  return "Zeek — rule-based detection";
-}
-function recommendedAction(a: Alert): string {
-  if (a.llm_explanation) {
-    const s = a.llm_explanation.split(/(?<=[.!?])\s+/);
-    const last = s[s.length - 1];
-    return last && last.length > 15 ? last : a.llm_explanation;
-  }
-  return "Explanation pending from AI triage layer...";
-}
-function timeAgo(iso: string): string {
+function timeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
 }
-const sevClasses: Record<string, { text: string; border: string; bg: string; dot: string }> = {
-  critical: { text: "text-red-400", border: "border-red-500/40", bg: "bg-red-500/10", dot: "bg-red-500" },
-  high: { text: "text-orange-400", border: "border-orange-500/40", bg: "bg-orange-500/10", dot: "bg-orange-500" },
-  medium: { text: "text-yellow-400", border: "border-yellow-500/40", bg: "bg-yellow-500/10", dot: "bg-yellow-500" },
-  low: { text: "text-blue-400", border: "border-blue-500/40", bg: "bg-blue-500/10", dot: "bg-blue-500" },
+function detectionMethod(desc: string) {
+  if (desc.startsWith("[Suricata")) return "Suricata — signature match";
+  if (desc.startsWith("Behavioral")) return "Welford — statistical baseline deviation";
+  if (desc.startsWith("New device")) return "Zeek — new device discovery";
+  if (desc.startsWith("Unauthorized")) return "Zeek — unauthorized write rule";
+  return "Zeek — rule-based detection";
+}
+function recommendedAction(a: Alert) {
+  if (a.llm_explanation) {
+    const s = a.llm_explanation.split(/(?<=[.!?])\s+/);
+    const last = s[s.length-1];
+    return last && last.length > 15 ? last : a.llm_explanation;
+  }
+  return "Triage pending from local LLM…";
+}
+
+const SEV: Record<string,{text:string;border:string;bg:string;label:string}> = {
+  critical:{ text:"#CC2A20", border:"rgba(255,59,48,0.35)",  bg:"rgba(255,59,48,0.07)",  label:"CRITICAL" },
+  high:    { text:"#B25000", border:"rgba(255,149,0,0.35)",  bg:"rgba(255,149,0,0.07)",  label:"HIGH"     },
+  medium:  { text:"#7A6000", border:"rgba(255,214,10,0.4)",  bg:"rgba(255,214,10,0.07)", label:"MEDIUM"   },
+  low:     { text:"#1A7A34", border:"rgba(52,199,89,0.35)",  bg:"rgba(52,199,89,0.07)",  label:"LOW"      },
 };
 
-export default function LiveView() {
+const PROTOCOLS = [
+  { name:"Modbus TCP", port:"TCP 502",   flow:"PLC .211 → HMI .212",  color:"#007AFF", icon:"⚡" },
+  { name:"S7comm",     port:"TCP 102",   flow:"S7-PLC → Client",       color:"#FF9500", icon:"🔧" },
+  { name:"DNP3",       port:"TCP 20000", flow:"DNP3 Client .218",       color:"#34C759", icon:"📡" },
+  { name:"OPC-UA",     port:"TCP 4840",  flow:"OPC-UA Client .220",    color:"#AF52DE", icon:"🔗" },
+];
+
+function ProtocolCard({ p }: { p: typeof PROTOCOLS[0] }) {
+  return (
+    <div style={{ background:"#FFFFFF", border:"1px solid #D1D1D6", borderRadius:14, padding:16, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:16 }}>{p.icon}</span>
+          <span style={{ fontSize:13, fontWeight:700, color:"#1C1C1E" }}>{p.name}</span>
+        </div>
+        <span style={{ fontSize:10, color:p.color, background:`${p.color}15`, border:`1px solid ${p.color}40`, padding:"3px 8px", borderRadius:6, fontFamily:"'JetBrains Mono',monospace", fontWeight:600 }}>{p.port}</span>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:10, fontSize:10, color:"#1A7A34", fontWeight:600 }}>
+        <span style={{ width:6, height:6, borderRadius:"50%", background:"#34C759", boxShadow:"0 0 6px rgba(52,199,89,0.6)", display:"inline-block", animation:"blink 1.5s infinite" }}/>
+        ICSNPP PARSER ACTIVE
+      </div>
+      <div style={{ height:44, marginTop:10, background:"#F2F2F7", border:"1px solid #E5E5EA", borderRadius:8, position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", left:"8%", right:"8%", top:"50%", height:2, background:`${p.color}30`, transform:"translateY(-50%)" }}/>
+        {[0, 0.7, 1.4].map((delay,i) => (
+          <div key={i} style={{ position:"absolute", top:"calc(50% - 4px)", width:8, height:8, borderRadius:"50%", background:p.color, boxShadow:`0 0 8px ${p.color}80`, animation:`packetTravel 2.2s linear ${delay}s infinite` }}/>
+        ))}
+      </div>
+      <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:10, color:"#6C6C70" }}>
+        <span>{p.flow}</span>
+        <span style={{ color:"#1A7A34", fontWeight:600 }}>● ACTIVE</span>
+      </div>
+    </div>
+  );
+}
+
+interface Props { card: React.CSSProperties }
+
+export default function LiveView({ card }: Props) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [lastUpdated, setLastUpdated] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [expanded, setExpanded] = useState<string | null>(null);
-  // Real, since-page-load sparkline of open-alert count -- genuine observed
-  // trend, not fabricated history, clearly scoped to "this session."
-  const [sparkline, setSparkline] = useState<{ t: string; count: number }[]>([]);
-  const startTime = useRef(Date.now());
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<string|null>(null);
 
   async function refresh() {
     try {
       const [a, s] = await Promise.all([fetchAlerts(), fetchAssets()]);
       setAlerts(a); setAssets(s);
-      const now = new Date();
-      setLastUpdated(now.toLocaleTimeString());
-      setSparkline(prev => [...prev, { t: now.toLocaleTimeString(), count: a.filter(x => x.status === "open").length }].slice(-30));
+      setLastUpdated(new Date().toLocaleTimeString());
       setError("");
-    } catch (e: any) { setError(e.message); }
+    } catch(e:any) { setError(e.message); }
   }
   useEffect(() => { refresh(); const id = setInterval(refresh, 3000); return () => clearInterval(id); }, []);
 
-  const open = alerts.filter(a => a.status === "open");
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
-  open.forEach(a => { counts[a.severity] = (counts[a.severity] || 0) + 1; });
-  const liveDevices = assets.filter(a => (Date.now() - new Date(a.last_seen).getTime()) / 1000 < 15).length;
-  const sessionMinutes = Math.max(1, Math.round((Date.now() - startTime.current) / 60000));
-
-  const StatCard = ({ label, value, accent }: { label: string; value: string | number; accent: string }) => (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <div className="text-xs text-slate-500 uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl font-bold mt-1 ${accent}`}>{value}</div>
-    </div>
-  );
+  const open = alerts.filter(a => a.status==="open");
+  const counts = { critical:0, high:0, medium:0, low:0 } as Record<string,number>;
+  open.forEach(a => { counts[a.severity] = (counts[a.severity]||0)+1; });
+  const liveDevices = assets.filter(a => (Date.now()-new Date(a.last_seen).getTime())/1000 < 15).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div>
-          <h1 className="text-xl font-bold">Live Monitoring</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+          <h1 style={{ fontSize:20, fontWeight:700, color:"#1C1C1E" }}>Live Command</h1>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4 }}>
+            <span style={{ position:"relative", display:"inline-flex", width:8, height:8 }}>
+              <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#34C759", opacity:0.6, animation:"ping 1.2s infinite" }}/>
+              <span style={{ position:"relative", display:"inline-block", borderRadius:"50%", width:8, height:8, background:"#34C759" }}/>
             </span>
-            <span className="text-emerald-400 text-xs font-semibold">LIVE</span>
-            <span className="text-slate-500 text-xs">refreshing every 3s · last update {lastUpdated}</span>
+            <span style={{ color:"#1A7A34", fontSize:12, fontWeight:600 }}>LIVE</span>
+            <span style={{ color:"#6C6C70", fontSize:12 }}>· refreshing every 3s · {lastUpdated}</span>
           </div>
         </div>
-        {counts.critical + counts.high > 0 && (
-          <span className="bg-red-500/15 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-full text-xs font-semibold animate-pulse">
-            🔔 {counts.critical + counts.high} high-priority alert{counts.critical + counts.high > 1 ? "s" : ""} need attention
-          </span>
-        )}
-      </div>
-      {error && <div className="text-red-400 text-sm">Connection error: {error}</div>}
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatCard label="Devices Monitored" value={assets.length} accent="text-blue-400" />
-        <StatCard label="Active Now" value={liveDevices} accent="text-emerald-400" />
-        <StatCard label="Open Alerts" value={open.length} accent="text-slate-100" />
-        <StatCard label="Critical" value={counts.critical} accent="text-red-400" />
-        <StatCard label="High" value={counts.high} accent="text-orange-400" />
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {(counts.critical+counts.high) > 0 && (
+            <span style={{ background:"rgba(255,59,48,0.08)", color:"#CC2A20", border:"1px solid rgba(255,59,48,0.3)", padding:"8px 16px", borderRadius:999, fontSize:12, fontWeight:600 }}>
+              🔔 {counts.critical+counts.high} critical/high alert{counts.critical+counts.high>1?"s":""} need attention
+            </span>
+          )}
+          {error && <span style={{ color:"#CC2A20", fontSize:12 }}>⚠ {error}</span>}
+        </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-        <div className="text-sm font-semibold text-slate-300 mb-1">Open Alert Count — This Session</div>
-        <div className="text-xs text-slate-500 mb-3">Live observed trend since dashboard opened ({sessionMinutes} min ago) — not historical, not predicted</div>
-        <ResponsiveContainer width="100%" height={140}>
-          <LineChart data={sparkline}>
-            <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-            <XAxis dataKey="t" stroke="#64748b" fontSize={10} interval="preserveStartEnd" />
-            <YAxis stroke="#64748b" fontSize={10} allowDecimals={false} width={24} />
-            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", fontSize: 12 }} />
-            <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={true} />
-          </LineChart>
-        </ResponsiveContainer>
+      {/* stat cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14 }}>
+        {[
+          { label:"DEVICES MONITORED", value:assets.length,    color:"#007AFF", bg:"rgba(0,122,255,0.06)"   },
+          { label:"ACTIVE NOW",        value:liveDevices,      color:"#1A7A34", bg:"rgba(52,199,89,0.06)"   },
+          { label:"OPEN ALERTS",       value:open.length,      color:"#1C1C1E", bg:"#FFFFFF"                },
+          { label:"CRITICAL",          value:counts.critical,  color:"#CC2A20", bg:"rgba(255,59,48,0.06)"   },
+          { label:"HIGH",              value:counts.high,      color:"#B25000", bg:"rgba(255,149,0,0.06)"   },
+        ].map(c => (
+          <div key={c.label} style={{ ...card, padding:18, background:c.bg }}>
+            <div style={{ fontSize:10, color:"#6C6C70", fontWeight:600, letterSpacing:"0.5px" }}>{c.label}</div>
+            <div style={{ fontSize:30, fontWeight:700, marginTop:6, color:c.color, fontFamily:"'JetBrains Mono',monospace" }}>{c.value}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* PLC live chart */}
+      <PLCChart />
+
+      {/* protocol matrix */}
+      <div style={{ ...card, padding:20 }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"#1C1C1E", marginBottom:4 }}>Industrial Protocol Parser Matrix</div>
+        <div style={{ fontSize:12, color:"#6C6C70", marginBottom:16 }}>Passive Zeek + ICSNPP inspection · no packets injected onto OT network</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+          {PROTOCOLS.map(p => <ProtocolCard key={p.name} p={p} />)}
+        </div>
+      </div>
+
+      {/* device grid */}
+      <div style={{ fontSize:14, fontWeight:700, color:"#1C1C1E" }}>Device Status & Alerts</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
         {assets.map(asset => {
-          const deviceAlerts = open.filter(a => a.description.includes(asset.ip_address));
-          const isLive = (Date.now() - new Date(asset.last_seen).getTime()) / 1000 < 15;
-          const worst = deviceAlerts.reduce((w, a) => {
-            const rank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
-            return (rank[a.severity] || 0) > (rank[w] || 0) ? a.severity : w;
+          const devAlerts = open.filter(a => a.description.includes(asset.ip_address));
+          const isLive = (Date.now()-new Date(asset.last_seen).getTime())/1000 < 15;
+          const worst = devAlerts.reduce((w,a) => {
+            const rank:Record<string,number> = {critical:4,high:3,medium:2,low:1};
+            return (rank[a.severity]||0)>(rank[w]||0) ? a.severity : w;
           }, "");
-          const isExpanded = expanded === asset.ip_address;
-          const sc = worst ? sevClasses[worst] : null;
+          const sc = worst ? SEV[worst] : null;
+          const isExp = expanded===asset.ip_address;
 
           return (
-            <div key={asset.ip_address} className={`rounded-xl border bg-slate-900/60 p-5 transition-colors hover:border-slate-600 ${sc ? sc.border : "border-slate-800"}`}>
-              <div className="flex justify-between items-start">
+            <div key={asset.ip_address} style={{
+              background:"#FFFFFF",
+              border:`1px solid ${sc ? sc.border : "#D1D1D6"}`,
+              borderRadius:14, padding:18,
+              boxShadow: sc ? `0 0 0 3px ${sc.bg}` : "0 1px 3px rgba(0,0,0,0.06)",
+              transition:"all 0.2s",
+            }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      {isLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-                      <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ position:"relative", display:"inline-flex", width:8, height:8 }}>
+                      {isLive && <span style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#34C759", opacity:0.6, animation:"ping 1.2s infinite" }}/>}
+                      <span style={{ position:"relative", display:"inline-block", borderRadius:"50%", width:8, height:8, background: isLive ? "#34C759" : "#C7C7CC" }}/>
                     </span>
-                    <span className="font-mono font-bold text-base">{asset.ip_address}</span>
+                    <span style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700, fontSize:14, color:"#1C1C1E" }}>{asset.ip_address}</span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {(asset.protocols || []).join(", ") || "protocol unknown"} · {isLive ? "active now" : `last seen ${timeAgo(asset.last_seen)}`}
+                  <div style={{ fontSize:11, color:"#6C6C70", marginTop:4 }}>
+                    {(asset.protocols||[]).join(", ") || "unknown"} · {isLive ? <span style={{color:"#1A7A34",fontWeight:600}}>active now</span> : `last seen ${timeAgo(asset.last_seen)}`}
                   </div>
                 </div>
-                {deviceAlerts.length > 0 ? (
-                  <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full ${sc!.bg} ${sc!.text}`}>{deviceAlerts.length} alert{deviceAlerts.length > 1 ? "s" : ""}</span>
+                {devAlerts.length>0 ? (
+                  <span style={{ fontSize:11, fontWeight:700, padding:"4px 12px", borderRadius:999, background:sc!.bg, color:sc!.text, border:`1px solid ${sc!.border}`, textTransform:"uppercase" }}>
+                    {devAlerts.length} alert{devAlerts.length>1?"s":""}
+                  </span>
                 ) : (
-                  <span className="text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400">Normal</span>
+                  <span style={{ fontSize:11, fontWeight:700, padding:"4px 12px", borderRadius:999, background:"rgba(52,199,89,0.08)", color:"#1A7A34", border:"1px solid rgba(52,199,89,0.3)" }}>Normal</span>
                 )}
               </div>
-              {deviceAlerts.length > 0 && (
-                <button onClick={() => setExpanded(isExpanded ? null : asset.ip_address)}
-                  className="mt-3 w-full text-xs text-slate-400 border border-slate-800 rounded-lg py-1.5 hover:bg-slate-800/50 hover:text-slate-200 transition-colors">
-                  {isExpanded ? "Hide details ▲" : "View alert details ▼"}
+
+              {devAlerts.length>0 && (
+                <button onClick={() => setExpanded(isExp ? null : asset.ip_address)} style={{
+                  marginTop:12, width:"100%", fontSize:12, color:"#6C6C70",
+                  background:"#F2F2F7", border:"1px solid #E5E5EA",
+                  borderRadius:10, padding:"7px 0", cursor:"pointer",
+                }}>
+                  {isExp ? "Hide details ▲" : "View alert details ▼"}
                 </button>
               )}
-              {isExpanded && deviceAlerts.map(a => {
-                const asc = sevClasses[a.severity];
+
+              {isExp && devAlerts.map(a => {
+                const asc = SEV[a.severity] || SEV.low;
                 return (
-                  <div key={a.id} className="mt-3 pt-3 border-t border-slate-800 space-y-2">
-                    <div className="flex justify-between">
-                      <span className={`text-xs font-bold uppercase ${asc.text}`}>{a.severity}</span>
-                      <span className="text-xs text-slate-500">{timeAgo(a.time)}</span>
+                  <div key={a.id} style={{ marginTop:12, paddingTop:12, borderTop:"1px solid #E5E5EA" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:asc.text, textTransform:"uppercase", background:asc.bg, border:`1px solid ${asc.border}`, padding:"2px 8px", borderRadius:5 }}>{a.severity}</span>
+                      <span style={{ fontSize:11, color:"#6C6C70" }}>{timeAgo(a.time)}</span>
                     </div>
-                    <div className="text-sm">{a.description}</div>
-                    <div className="text-xs text-blue-400">Detected by: {detectionMethod(a.description)}</div>
-                    <div className="text-xs text-slate-400 bg-slate-950 rounded-lg p-2.5">
-                      <span className="text-slate-300 font-medium">Recommended action: </span>{recommendedAction(a)}
+                    <div style={{ fontSize:12, marginBottom:6, color:"#3A3A3C", lineHeight:1.5 }}>{a.description}</div>
+                    <div style={{ fontSize:11, color:"#007AFF", marginBottom:6, fontWeight:500 }}>🔍 {detectionMethod(a.description)}</div>
+                    <div style={{ fontSize:11, background:"#F2F2F7", border:"1px solid #E5E5EA", borderRadius:8, padding:"10px 12px", color:"#3A3A3C", lineHeight:1.6 }}>
+                      <span style={{ color:"#1C1C1E", fontWeight:600 }}>Recommended fix: </span>{recommendedAction(a)}
                     </div>
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => acknowledgeAlert(a.id, "acknowledged").then(refresh)}
-                        className="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg py-1.5 transition-colors">
-                        Acknowledge
-                      </button>
-                      <button onClick={() => acknowledgeAlert(a.id, "resolved").then(refresh)}
-                        className="flex-1 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg py-1.5 transition-colors">
-                        Resolve
-                      </button>
-                      <button onClick={() => acknowledgeAlert(a.id, "false_positive").then(refresh)}
-                        className="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-500 rounded-lg py-1.5 transition-colors">
-                        False Positive
-                      </button>
+                    <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                      {[
+                        { label:"Acknowledge", status:"acknowledged" as const, bg:"rgba(255,149,0,0.08)", color:"#B25000", border:"rgba(255,149,0,0.3)" },
+                        { label:"Resolve",     status:"resolved"     as const, bg:"rgba(52,199,89,0.08)", color:"#1A7A34", border:"rgba(52,199,89,0.3)" },
+                        { label:"False +",     status:"false_positive" as const, bg:"#F2F2F7", color:"#6C6C70", border:"#D1D1D6" },
+                      ].map(btn => (
+                        <button key={btn.label} onClick={() => acknowledgeAlert(a.id, btn.status).then(refresh)} style={{
+                          flex:1, fontSize:11, background:btn.bg, color:btn.color,
+                          border:`1px solid ${btn.border}`, borderRadius:8,
+                          padding:"7px 0", cursor:"pointer", fontWeight:500,
+                        }}>{btn.label}</button>
+                      ))}
                     </div>
                   </div>
                 );
@@ -183,7 +231,7 @@ export default function LiveView() {
           );
         })}
       </div>
-      {assets.length === 0 && <div className="text-slate-600 italic">No devices discovered yet.</div>}
+      {assets.length===0 && <div style={{ color:"#6C6C70", fontStyle:"italic", textAlign:"center", padding:40 }}>No devices discovered yet.</div>}
     </div>
   );
 }

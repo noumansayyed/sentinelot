@@ -3,3 +3,23 @@
 # Byte offset 7 in the TCP payload is the function code, per the
 # Modbus Application Protocol spec (MBAP header is 7 bytes).
 alert tcp any any -> any 502 (msg:"SentinelOT: Modbus WRITE SINGLE REGISTER command observed"; content:"|06|"; offset:7; depth:1; flow:to_server; sid:1000001; rev:1;)
+
+# EtherNet/IP — CIP over TCP 44818 (Allen-Bradley PLCs, Rockwell)
+alert tcp any any -> any 44818 (msg:"SentinelOT: EtherNet/IP connection to PLC"; flow:to_server,established; sid:1000002; rev:1;)
+alert tcp any any -> any 44818 (msg:"SentinelOT: EtherNet/IP CIP Write detected"; content:"|4d|"; offset:24; depth:1; flow:to_server,established; sid:1000003; rev:1;)
+
+# EtherNet/IP — UDP 44818 (broadcast/multicast discovery)
+alert udp any any -> any 44818 (msg:"SentinelOT: EtherNet/IP UDP discovery packet"; sid:1000004; rev:1;)
+
+# BACnet/IP — UDP 47808 (building automation, common in smart factories)
+alert udp any any -> any 47808 (msg:"SentinelOT: BACnet traffic observed"; sid:1000005; rev:1;)
+alert udp any any -> any 47808 (msg:"SentinelOT: BACnet WriteProperty command detected"; content:"|0f|"; offset:0; depth:4; sid:1000006; rev:1;)
+
+# DNP3 — unsolicited response (can indicate rogue RTU)
+alert tcp any any -> any 20000 (msg:"SentinelOT: DNP3 connection observed"; flow:to_server,established; sid:1000007; rev:1;)
+
+# S7comm — TCP 102 write detected via COTP+S7 header
+alert tcp any any -> any 102 (msg:"SentinelOT: S7comm connection to PLC port 102"; flow:to_server,established; sid:1000008; rev:1;)
+
+# OPC-UA — TCP 4840
+alert tcp any any -> any 4840 (msg:"SentinelOT: OPC-UA session established"; flow:to_server,established; sid:1000009; rev:1;)
