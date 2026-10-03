@@ -1,3 +1,4 @@
+import { cleanDesc } from "./HistoryView";
 import { useEffect, useRef, useState } from "react";
 import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
 import PLCChart from "./components/PLCChart";

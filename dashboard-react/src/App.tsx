@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 import { fetchAlerts, Alert } from "./api";
+import { cleanDesc } from "./HistoryView";
 import LiveView from "./LiveView";
 import HistoryView from "./HistoryView";
 
 type Tab = "live" | "history";
 
 // Strip " at 2026-09-26T05:56:47+00:00" or " at 2026-09-26T05:56:47Z" anywhere in string
-export function cleanDesc(desc: string): string {
-  return desc
-    .replace(/\s+at\s+\d{4}-\d{2}-\d{2}T[\d:.]+([+-]\d{2}:\d{2}|Z)/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("live");

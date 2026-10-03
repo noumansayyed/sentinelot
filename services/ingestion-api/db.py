@@ -127,9 +127,14 @@ async def insert_signature_alert(
     )
 
 
-async def update_alert_status(alert_id: str, new_status: str) -> bool:
+async def update_alert_status(alert_id: str, new_status: str, acknowledged_by: str = "operator") -> bool:
     pool = await get_pool()
     result = await pool.execute(
-        "UPDATE alerts SET status = $1 WHERE id = $2", new_status, alert_id
+        """UPDATE alerts
+           SET status = $1,
+               acknowledged_by = CASE WHEN $1 != 'open' THEN $3 ELSE acknowledged_by END,
+               acknowledged_at = CASE WHEN $1 != 'open' THEN NOW() ELSE acknowledged_at END
+           WHERE id = $2""",
+        new_status, alert_id, acknowledged_by
     )
     return result != "UPDATE 0"

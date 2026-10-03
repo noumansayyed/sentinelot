@@ -84,6 +84,7 @@ a plant's formal compliance and audit processes.
 def main():
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SET app.current_tenant = '11111111-1111-1111-1111-111111111111'")
 
     cur.execute("SELECT name FROM sites WHERE id = %s", (SITE_ID,))
     site = cur.fetchone()

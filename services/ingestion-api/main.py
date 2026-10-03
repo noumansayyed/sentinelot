@@ -35,7 +35,7 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "null"],  # dashboard is a local file
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -282,6 +282,7 @@ async def ingest_signature_alerts(
 
 class UpdateAlertStatusRequest(BaseModel):
     status: Literal["open", "acknowledged", "resolved", "false_positive"]
+    acknowledged_by: str = "operator"
 
 
 @app.patch("/v1/alerts/{alert_id}")
@@ -290,7 +291,7 @@ async def update_alert_status(
 ):
     from db import update_alert_status as db_update_alert_status
 
-    updated = await db_update_alert_status(str(alert_id), req.status)
+    updated = await db_update_alert_status(str(alert_id), req.status, req.acknowledged_by)
     if not updated:
         raise HTTPException(status_code=404, detail="alert not found")
-    return {"id": str(alert_id), "status": req.status}
+    return {"id": str(alert_id), "status": req.status, "acknowledged_by": req.acknowledged_by}

@@ -19,6 +19,7 @@ export async function getToken(): Promise<string> {
 export interface Alert {
   id: string; time: string; severity: string; description: string;
   llm_explanation: string | null; status: string;
+  acknowledged_by: string | null; acknowledged_at: string | null;
 }
 export interface Asset {
   ip_address: string; device_role: string; criticality: string;
@@ -27,20 +28,29 @@ export interface Asset {
 
 export async function fetchAlerts(): Promise<Alert[]> {
   const t = await getToken();
-  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/alerts`, { headers: { Authorization: `Bearer ${t}` } });
+  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/alerts`, {
+    headers: { Authorization: `Bearer ${t}` }
+  });
   return (await res.json()).alerts;
 }
+
 export async function fetchAssets(): Promise<Asset[]> {
   const t = await getToken();
-  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/assets`, { headers: { Authorization: `Bearer ${t}` } });
+  const res = await fetch(`${API_BASE}/v1/sites/${SITE_ID}/assets`, {
+    headers: { Authorization: `Bearer ${t}` }
+  });
   return (await res.json()).assets;
 }
 
-export async function acknowledgeAlert(id: string, status: "acknowledged" | "resolved" | "false_positive") {
+export async function acknowledgeAlert(
+  id: string,
+  status: "acknowledged" | "resolved" | "false_positive",
+  acknowledged_by: string = "operator"
+) {
   const t = await getToken();
   await fetch(`${API_BASE}/v1/alerts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, acknowledged_by }),
   });
 }
