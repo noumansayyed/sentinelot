@@ -1,85 +1,29 @@
+# SentinelOT
 
-## Startup (after reboot)
-See validation/runbooks/span_demo.md for SPAN/live demo instructions.
-Telemetry API runs on sentinelot_default + macvlan IP 172.28.240.221.
+Live demo/SPAN instructions: validation/runbooks/span_demo.md
 
-## start
+## Daily start
+1. Start Docker Desktop. Wait for "running".
+2. Open Ubuntu and run: ~/sentinelot/start.sh   (about 2 minutes, do not press Ctrl+C)
+3. Open http://localhost:8090/dashboard, log in, press Start PLC if it is stopped.
+4. Open http://localhost:3000 and press Ctrl+Shift+R.
+5. Attack demo: docker start rogue-device
 
-1. Start Docker Desktop and wait for it to say "running".
-2. Open Ubuntu (WSL) and run `~/sentinelot/start.sh` (about 2 minutes). Do not press Ctrl+C.
-3. Open http://localhost:3000 and press Ctrl+Shift+R.
-4. Open http://localhost:8090/dashboard, log in, and press **Start PLC** if the program is stopped.
-   The PLC must be running or the Modbus card and live chart stay empty.
-5. Attack demo: `docker start rogue-device`
+Notes: start.sh keeps all data. Never wipe the database before a demo.
+Use the same browser (Audit Report and KNOWN/UNKNOWN approvals are saved in the browser).
 
-start.sh keeps all data (devices, alerts, history). Never run a TRUNCATE before a demo.
-The Audit Report and KNOWN/UNKNOWN approvals are stored in the browser, so use the same browser.
+## Off-hours demo
+1. Set off-hours to the current hour (24h, India time): ~/sentinelot/set-offhours.sh 14
+2. Wait about 1 minute: devices that are still talking get an "Off-hours activity" alert.
+3. Put back to normal: ~/sentinelot/set-offhours.sh 22
 
-## Demo policy: off-hours rule
-
-Off-hours is decided in India time (IST). To trigger the rule during a demo,
-set the start of off-hours to the current hour (24-hour clock):
-
-    ~/sentinelot/set-offhours.sh 14
-
-Within about a minute, each device still talking gets an "Off-hours activity" alert.
-The same device alerts at most once per 15 minutes.
-Say: "Working hours are configured for this demo, and traffic after that hour triggers the rule."
-
-To put it back to normal:
-
-    ~/sentinelot/set-offhours.sh 22
-
-## Setting up on another laptop or PC
-
-Requirements: Windows with WSL2 Ubuntu, Docker Desktop with WSL integration on, git,
-and enough RAM for the local LLM (ollama). Then:
-
-1. Clone the repo into ~/sentinelot.
-2. Recreate the lab network `sentinelot-net` (macvlan, 172.28.240.0/20). The parent interface differs per machine.
-3. Build the local images (real-sensor, opcua-server, telemetry-api, dashboard-react, and the lab devices) from their Dockerfiles.
-4. Pull the ollama model used by llm-triage.
-5. Run start.sh, then start the PLC program from http://localhost:8090/dashboard.
-
-## What is in git and what is not
-
-In git: all lab device code (zeek-lab/), the sensor, bridges, services, dashboard, and the counter
-program for the PLC: `zeek-lab/openplc-program/simple_plc.st`.
-
-Not in git (set up by hand on a new machine):
-- `.env` (secrets). Copy it from the old machine; the key names are in `.env.example`.
-- Lab container settings (IPs, images, mounts): see `setup/lab-containers.txt`.
-- Lab network command: see `setup/network.txt` (change `parent=` to the new machine's interface).
-- Keycloak realm `sentinelot` and user `operator`: stored in a Docker volume unless exported.
-- Ollama model: `docker exec ollama ollama pull qwen2.5:1.5b`
-
-## Loading the counter program into OpenPLC
-
-1. Open http://localhost:8090/dashboard and log in.
-2. Programs, then upload `zeek-lab/openplc-program/simple_plc.st`, then compile.
-3. Press Start PLC. Modbus register 0 now counts up and wraps.
-
-## What is in git and what is not
-
-In git: all lab device code (zeek-lab/), the sensor, bridges, services, dashboard, and the counter
-program for the PLC: `zeek-lab/openplc-program/simple_plc.st`.
-
-Not in git (set up by hand on a new machine):
-- `.env` (secrets). Copy it from the old machine; the key names are in `.env.example`.
-- Lab container settings (IPs, images, mounts): see `setup/lab-containers.txt`.
-- Lab network command: see `setup/network.txt` (change `parent=` to the new machine's interface).
-- Keycloak realm `sentinelot` and user `operator`: stored in a Docker volume unless exported.
-- Ollama model: `docker exec ollama ollama pull qwen2.5:1.5b`
-
-## Loading the counter program into OpenPLC
-
-1. Open http://localhost:8090/dashboard and log in.
-2. Programs, then upload `zeek-lab/openplc-program/simple_plc.st`, then compile.
-3. Press Start PLC. Modbus register 0 now counts up and wraps.
-
-## Keycloak login on a new machine
-
-`setup/keycloak-realm.json` holds the realm `sentinelot` and its clients (exported without users or secrets).
-1. Open http://localhost:8080, log in as admin, create a realm, and import that file.
-2. Create the user `operator` (password in your notes) and set it as non-temporary.
-3. Confirm the client `sentinelot-dashboard` allows direct access (password) grants.
+## Setup on another laptop/PC
+1. Install Docker Desktop (WSL2 on) and git.
+2. git clone https://github.com/noumansayyed/sentinelot.git ~/sentinelot
+3. Copy .env from the old machine (key names are in .env.example).
+4. Create the lab network: edit parent= in setup/network.txt to your network interface (check with: ip a), then run: bash setup/network.txt
+5. Build the lab images from their folders in zeek-lab/ (image names and IPs are listed in setup/lab-containers.txt), then: docker compose up -d --build
+6. Pull the AI model: docker exec ollama ollama pull qwen2.5:1.5b
+7. Keycloak: open http://localhost:8080, log in as admin, import setup/keycloak-realm.json as a realm, create user "operator" (non-temporary password).
+8. OpenPLC: open http://localhost:8090/dashboard, upload zeek-lab/openplc-program/simple_plc.st, compile, press Start PLC.
+9. Run ~/sentinelot/start.sh
