@@ -115,12 +115,12 @@ function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: 
         <span style={{ fontSize:10, color:p.color, background:`${p.color}15`, border:`1px solid ${p.color}40`, padding:"3px 8px", borderRadius:6, fontWeight:600 }}>{p.port}</span>
       </div>
       <div style={{ fontSize:11, fontWeight:600, marginTop:8, color: seen ? "#32D74B" : "#C7C7CC" }}>
-        {seen ? `● ACTIVE · ${devs.length} device${devs.length>1?"s":""} seen` : "○ CONNECTIONS ONLY · NO PARSED MESSAGES"}
+        {seen ? `● ACTIVE · ${devs.length} device${devs.length>1?"s":""} seen${k!=="modbus"?" · connection-level":""}` : "○ NO TRAFFIC SEEN"}
       </div>
-      {!seen && Object.entries(REGISTRY).filter(([ip,v]) => v.name.toLowerCase().includes(k==="opc"?"opcua":k==="s7"?"s7":k==="dnp3"?"dnp3":"zzz")).map(([ip,v]) => (
+      {false && Object.entries(REGISTRY).filter(([ip,v]) => v.name.toLowerCase().includes(k==="opc"?"opcua":k==="s7"?"s7":k==="dnp3"?"dnp3":"zzz")).map(([ip,v]) => (
         <div key={ip} style={{ marginTop:8, fontSize:11, color:"#D1D1D6" }}><b style={{fontFamily:"monospace"}}>{ip}</b> · {v.role}<br/>connections seen on {p.port} (Zeek conn.log), no parsed messages</div>
       ))}
-      {devs.map(d => {
+      {devs.map((d, idx) => {
         const r = REGISTRY[d.ip_address];
         const known = isKnown(d.ip_address);
         const da = open.filter(a => a.description.includes(d.ip_address));
@@ -128,7 +128,7 @@ function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: 
         return (
           <div key={d.ip_address} style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #3A3A3C", fontSize:11, color:"#D1D1D6", lineHeight:1.6 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700, fontSize:12 }}>{d.ip_address}</span>
+              <span style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700, fontSize:12 }}>{idx+1}. {d.ip_address}</span>
               {HAS_REG && <span style={{ fontSize:10, fontWeight:700, padding:"1px 8px", borderRadius:999, color:known?"#32D74B":"#FF6B61", background:known?"rgba(52,199,89,0.1)":"rgba(255,59,48,0.1)" }}>{known?"KNOWN":"UNKNOWN"}</span>}
             </div>
             <div>{r ? r.role : "Not in approved baseline"}</div>

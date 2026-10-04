@@ -30,3 +30,9 @@ body {
 }
 
 html.light-theme { filter: invert(1) hue-rotate(180deg); background:#fff; }
+
+button { color: #F5F5F7; }
+button:disabled { opacity: 0.5; }
+
+button { color: #F5F5F7; }
+button:disabled { opacity: 0.5; }
