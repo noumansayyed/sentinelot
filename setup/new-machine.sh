@@ -8,8 +8,8 @@ for p in hmi-device:sentinelot-hmi rogue-device:sentinelot-rogue dnp3-client:sen
 for p in services/telemetry-api:sentinelot-telemetry-api services/llm-triage:sentinelot-llm-triage services/compliance-report:sentinelot-compliance-report dashboard-react:sentinelot-dashboard-react zeek-bridge:sentinelot-zeek-bridge; do
   [ -f ${p%%:*}/Dockerfile ] && docker build -t ${p##*:} ${p%%:*} || echo "skip ${p%%:*}"; done
 echo "== core services"; docker compose up -d --build
-echo "== AI model"; docker start ollama >/dev/null 2>&1 || true; docker exec ollama ollama pull qwen2.5:1.5b || true
 echo "== lab containers"; bash setup/recreate-lab.sh
+sleep 10; echo "== AI model"; docker exec ollama ollama pull qwen2.5:1.5b || true
 echo "== login (Keycloak)"; sleep 40
 PW=$(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2-)
 TOK=$(curl -s -d client_id=admin-cli -d username=admin --data-urlencode "password=$PW" -d grant_type=password http://localhost:8080/realms/master/protocol/openid-connect/token | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
