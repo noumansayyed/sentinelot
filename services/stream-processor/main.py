@@ -84,7 +84,7 @@ def _offhrs_ok(event):
 
 def is_off_hours(ts: datetime) -> bool:
     from datetime import timedelta as _td; local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
-    return local_hour < 6 or local_hour >= 22
+    return local_hour < 6 or local_hour >= 14
 
 
 def is_write_command(function_code: str | None) -> bool:
@@ -199,7 +199,7 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
     if is_off_hours(ts) and _offhrs_ok(event) and event["protocol"] in ("modbus_tcp", "dnp3", "s7comm"):
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, "high",
-            f"Industrial protocol activity ({event['protocol']}) observed outside normal hours "
+            f"Industrial protocol activity ({event['protocol']}) from {event.get('src_ip') or 'unknown'} observed outside normal hours "
             f"at {ts.isoformat()}",
         )
 

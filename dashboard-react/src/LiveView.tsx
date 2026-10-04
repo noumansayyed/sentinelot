@@ -253,7 +253,7 @@ export default function LiveView({ card }: Props) {
                 return (
                   <div key={a.id} style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #3A3A3C", fontSize:11, color:"#D1D1D6", lineHeight:1.6 }}>
                     <div><b>{ip||"device"}</b> {r ? "· "+r.role : ""} · {(dev?.protocols||[]).join(", ")||"protocol n/a"} · {timeAgo(a.time)}</div>
-                    <div><b>What happened:</b> {a.description}</div>
+                    <div><b>What happened:</b> {cleanDesc(a.description)}</div>
                     <div><b>Detected by:</b> {detectionMethod(a.description)}</div>
                     <div><b>AI advice:</b> {recommendedAction(a)}</div>
                     <div style={{ display:"flex", gap:6, marginTop:6 }}>
