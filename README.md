@@ -3,7 +3,7 @@
 See validation/runbooks/span_demo.md for SPAN/live demo instructions.
 Telemetry API runs on sentinelot_default + macvlan IP 172.28.240.221.
 
-## Daily start
+## start
 
 1. Start Docker Desktop and wait for it to say "running".
 2. Open Ubuntu (WSL) and run `~/sentinelot/start.sh` (about 2 minutes). Do not press Ctrl+C.
