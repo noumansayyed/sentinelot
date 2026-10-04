@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { REGISTRY, HAS_REG, isKnown } from "./LiveView";
 import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
 
 export function cleanDesc(desc: string): string {
@@ -6,16 +7,16 @@ export function cleanDesc(desc: string): string {
 }
 
 const SEV: Record<string,{text:string;bg:string;border:string}> = {
-  critical:{ text:"#CC2A20", bg:"rgba(255,59,48,0.07)",  border:"rgba(255,59,48,0.3)"  },
-  high:    { text:"#B25000", bg:"rgba(255,149,0,0.07)",  border:"rgba(255,149,0,0.3)"  },
-  medium:  { text:"#7A6000", bg:"rgba(255,214,10,0.07)", border:"rgba(255,214,10,0.35)"},
-  low:     { text:"#1A7A34", bg:"rgba(52,199,89,0.07)",  border:"rgba(52,199,89,0.3)"  },
+  critical:{ text:"#FF6B61", bg:"rgba(255,59,48,0.07)",  border:"rgba(255,59,48,0.3)"  },
+  high:    { text:"#FF9F0A", bg:"rgba(255,149,0,0.07)",  border:"rgba(255,149,0,0.3)"  },
+  medium:  { text:"#FFD60A", bg:"rgba(255,214,10,0.07)", border:"rgba(255,214,10,0.35)"},
+  low:     { text:"#32D74B", bg:"rgba(52,199,89,0.07)",  border:"rgba(52,199,89,0.3)"  },
 };
 const STS: Record<string,{text:string;bg:string}> = {
-  open:          { text:"#CC2A20", bg:"rgba(255,59,48,0.07)"  },
-  acknowledged:  { text:"#B25000", bg:"rgba(255,149,0,0.07)"  },
-  resolved:      { text:"#1A7A34", bg:"rgba(52,199,89,0.07)"  },
-  false_positive:{ text:"#6C6C70", bg:"rgba(0,0,0,0.04)"      },
+  open:          { text:"#FF6B61", bg:"rgba(255,59,48,0.07)"  },
+  acknowledged:  { text:"#FF9F0A", bg:"rgba(255,149,0,0.07)"  },
+  resolved:      { text:"#32D74B", bg:"rgba(52,199,89,0.07)"  },
+  false_positive:{ text:"#D1D1D6", bg:"rgba(0,0,0,0.04)"      },
 };
 
 function detMethod(desc: string) {
@@ -67,7 +68,7 @@ export default function HistoryView({ card }: Props) {
   });
 
   const sel: React.CSSProperties = {
-    background:"#FFFFFF", border:"1px solid #D1D1D6", color:"#1C1C1E",
+    background:"#1C1C1E", border:"1px solid #48484A", color:"#F5F5F7",
     borderRadius:8, padding:"6px 12px", fontSize:12, outline:"none", cursor:"pointer",
     boxShadow:"0 1px 2px rgba(0,0,0,0.05)",
   };
@@ -84,8 +85,8 @@ export default function HistoryView({ card }: Props) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div>
-        <h1 style={{ fontSize:20, fontWeight:700, color:"#1C1C1E" }}>Historical Analytics</h1>
-        <div style={{ fontSize:12, color:"#6C6C70", marginTop:4 }}>
+        <h1 style={{ fontSize:20, fontWeight:700, color:"#F5F5F7" }}>Historical Analytics</h1>
+        <div style={{ fontSize:12, color:"#D1D1D6", marginTop:4 }}>
           TimescaleDB · last refreshed {lastUpdated}
         </div>
       </div>
@@ -93,14 +94,14 @@ export default function HistoryView({ card }: Props) {
       {/* summary */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
         {[
-          { label:"TOTAL",   value:alerts.length,                                        color:"#1C1C1E", bg:"#FFFFFF" },
-          { label:"OPEN",    value:alerts.filter(a=>a.status==="open").length,           color:"#CC2A20", bg:"rgba(255,59,48,0.06)" },
-          { label:"ACK'D",   value:alerts.filter(a=>a.status==="acknowledged").length,   color:"#B25000", bg:"rgba(255,149,0,0.06)" },
-          { label:"RESOLVED",value:alerts.filter(a=>a.status==="resolved").length,       color:"#1A7A34", bg:"rgba(52,199,89,0.06)" },
-          { label:"FALSE +", value:alerts.filter(a=>a.status==="false_positive").length, color:"#6C6C70", bg:"#F2F2F7" },
+          { label:"TOTAL",   value:alerts.length,                                        color:"#F5F5F7", bg:"#1C1C1E" },
+          { label:"OPEN",    value:alerts.filter(a=>a.status==="open").length,           color:"#FF6B61", bg:"rgba(255,59,48,0.06)" },
+          { label:"ACK'D",   value:alerts.filter(a=>a.status==="acknowledged").length,   color:"#FF9F0A", bg:"rgba(255,149,0,0.06)" },
+          { label:"RESOLVED",value:alerts.filter(a=>a.status==="resolved").length,       color:"#32D74B", bg:"rgba(52,199,89,0.06)" },
+          { label:"FALSE +", value:alerts.filter(a=>a.status==="false_positive").length, color:"#D1D1D6", bg:"#2C2C2E" },
         ].map(c => (
           <div key={c.label} style={{ ...card, padding:16, background:c.bg }}>
-            <div style={{ fontSize:10, color:"#6C6C70", fontWeight:600, letterSpacing:"0.5px" }}>{c.label}</div>
+            <div style={{ fontSize:10, color:"#D1D1D6", fontWeight:600, letterSpacing:"0.5px" }}>{c.label}</div>
             <div style={{ fontSize:26, fontWeight:700, marginTop:4, color:c.color, fontFamily:"'JetBrains Mono',monospace" }}>{c.value}</div>
           </div>
         ))}
@@ -108,7 +109,7 @@ export default function HistoryView({ card }: Props) {
 
       {/* filters */}
       <div style={{ ...card, padding:16, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:12, color:"#6C6C70", fontWeight:600 }}>FILTER</span>
+        <span style={{ fontSize:12, color:"#D1D1D6", fontWeight:600 }}>FILTER</span>
         <select value={filterSev} onChange={e=>setFilterSev(e.target.value)} style={sel}>
           <option value="all">All Severities</option>
           {["critical","high","medium","low"].map(s=><option key={s} value={s}>{s[0].toUpperCase()+s.slice(1)}</option>)}
@@ -127,10 +128,10 @@ export default function HistoryView({ card }: Props) {
         </select>
         <input placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{ ...sel, flex:1, minWidth:160 }} />
-        <span style={{ fontSize:12, color:"#6C6C70" }}>{filtered.length}/{alerts.length}</span>
+        <span style={{ fontSize:12, color:"#D1D1D6" }}>{filtered.length}/{alerts.length}</span>
         {(filterSev!=="all"||filterStatus!=="all"||filterDevice!=="all"||filterProto!=="all"||search) && (
           <button onClick={()=>{setFilterSev("all");setFilterStatus("all");setFilterDevice("all");setFilterProto("all");setSearch("");}}
-            style={{ ...sel, color:"#CC2A20", borderColor:"rgba(255,59,48,0.3)" }}>✕ Clear</button>
+            style={{ ...sel, color:"#FF6B61", borderColor:"rgba(255,59,48,0.3)" }}>✕ Clear</button>
         )}
       </div>
 
@@ -139,24 +140,24 @@ export default function HistoryView({ card }: Props) {
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
-              <tr style={{ background:"#F2F2F7", borderBottom:"1px solid #D1D1D6" }}>
-                {["SR","DATE","TIME","SEVERITY","STATUS","DESCRIPTION","METHOD","ACTION / BY"].map(h=>(
-                  <th key={h} style={{ padding:"11px 14px", textAlign:"left", color:"#6C6C70", fontWeight:600, fontSize:11, whiteSpace:"nowrap", letterSpacing:"0.3px" }}>{h}</th>
+              <tr style={{ background:"#2C2C2E", borderBottom:"1px solid #48484A" }}>
+                {["SR","DATE","TIME","SEVERITY","STATUS","DEVICE","DESCRIPTION","METHOD","ACTION / BY"].map(h=>(
+                  <th key={h} style={{ padding:"11px 14px", textAlign:"left", color:"#D1D1D6", fontWeight:600, fontSize:11, whiteSpace:"nowrap", letterSpacing:"0.3px" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.length===0 && (
-                <tr><td colSpan={8} style={{ padding:40, textAlign:"center", color:"#6C6C70" }}>No records match filters.</td></tr>
+                <tr><td colSpan={9} style={{ padding:40, textAlign:"center", color:"#D1D1D6" }}>No records match filters.</td></tr>
               )}
               {rows.map((row, ri) => {
                 if (row.type==="date") return (
                   <tr key={`date-${ri}`}>
-                    <td colSpan={8} style={{ padding:"8px 14px", background:"#F9F9FB", borderTop:"1px solid #E5E5EA", borderBottom:"1px solid #E5E5EA" }}>
+                    <td colSpan={9} style={{ padding:"8px 14px", background:"#242426", borderTop:"1px solid #3A3A3C", borderBottom:"1px solid #3A3A3C" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ flex:1, height:1, background:"#D1D1D6" }}/>
-                        <span style={{ fontSize:11, fontWeight:700, color:"#6C6C70", whiteSpace:"nowrap" }}>── {row.date} ──</span>
-                        <div style={{ flex:1, height:1, background:"#D1D1D6" }}/>
+                        <div style={{ flex:1, height:1, background:"#48484A" }}/>
+                        <span style={{ fontSize:11, fontWeight:700, color:"#D1D1D6", whiteSpace:"nowrap" }}>── {row.date} ──</span>
+                        <div style={{ flex:1, height:1, background:"#48484A" }}/>
                       </div>
                     </td>
                   </tr>
@@ -165,14 +166,14 @@ export default function HistoryView({ card }: Props) {
                 const sc = SEV[a.severity] || SEV.low;
                 const st = STS[a.status] || STS.open;
                 return (
-                  <tr key={a.id} style={{ background: idx%2===0 ? "#FFFFFF" : "#FAFAFA", borderBottom:"1px solid #F2F2F7" }}>
-                    <td style={{ padding:"11px 14px", color:"#6C6C70", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
+                  <tr key={a.id} style={{ background: idx%2===0 ? "#1C1C1E" : "#202022", borderBottom:"1px solid #2C2C2E" }}>
+                    <td style={{ padding:"11px 14px", color:"#D1D1D6", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
                       {idx+1}
                     </td>
-                    <td style={{ padding:"11px 14px", color:"#6C6C70", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"11px 14px", color:"#D1D1D6", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
                       {fmtDate(a.time)}
                     </td>
-                    <td style={{ padding:"11px 14px", color:"#6C6C70", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"11px 14px", color:"#D1D1D6", fontFamily:"'JetBrains Mono',monospace", fontSize:11, whiteSpace:"nowrap" }}>
                       {fmtTime(a.time)}
                     </td>
                     <td style={{ padding:"11px 14px" }}>
@@ -181,23 +182,39 @@ export default function HistoryView({ card }: Props) {
                     <td style={{ padding:"11px 14px" }}>
                       <span style={{ color:st.text, background:st.bg, padding:"3px 8px", borderRadius:6, fontSize:11, fontWeight:500 }}>{a.status.replace("_"," ")}</span>
                     </td>
-                    <td style={{ padding:"11px 14px", color:"#3A3A3C", maxWidth:280 }}>{cleanDesc(a.description)}</td>
+                    <td style={{ padding:"11px 14px", fontSize:11, whiteSpace:"nowrap" }}>
+                      {(() => {
+                        const ip = (a.description.match(/\d+\.\d+\.\d+\.\d+/) || [""])[0];
+                        const r = REGISTRY[ip];
+                        const known = isKnown(ip);
+                        return ip ? (
+                          <div>
+                            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700 }}>{ip}</div>
+                            <div style={{ color:"#D1D1D6" }}>{r ? r.role : "Not in approved baseline"}</div>
+                            {HAS_REG && <span style={{ fontSize:10, fontWeight:700, color:known?"#32D74B":"#FF6B61" }}>{known?"KNOWN":"UNKNOWN"}</span>}
+                          </div>
+                        ) : "—";
+                      })()}
+                    </td>
+                    <td style={{ padding:"11px 14px", color:"#D1D1D6", maxWidth:280 }}>{cleanDesc(a.description)}</td>
                     <td style={{ padding:"11px 14px", color:"#007AFF", fontSize:11, whiteSpace:"nowrap" }}>{detMethod(a.description)}</td>
                     <td style={{ padding:"11px 14px", minWidth:160 }}>
                       {a.status==="open" ? (
                         <div style={{ display:"flex", gap:6 }}>
-                          <button onClick={()=>acknowledgeAlert(a.id,"acknowledged").then(load)}
-                            style={{ fontSize:10, background:"rgba(255,149,0,0.08)", color:"#B25000", border:"1px solid rgba(255,149,0,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Ack</button>
-                          <button onClick={()=>acknowledgeAlert(a.id,"resolved").then(load)}
-                            style={{ fontSize:10, background:"rgba(52,199,89,0.08)", color:"#1A7A34", border:"1px solid rgba(52,199,89,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Resolve</button>
+                          <button title="I have seen this alert and am investigating. Alert stays open." onClick={()=>acknowledgeAlert(a.id,"acknowledged").then(load)}
+                            style={{ fontSize:10, background:"rgba(255,149,0,0.08)", color:"#FF9F0A", border:"1px solid rgba(255,149,0,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Ack</button>
+                          <button title="Problem fixed or confirmed harmless. Alert is closed." onClick={()=>acknowledgeAlert(a.id,"resolved").then(load)}
+                            style={{ fontSize:10, background:"rgba(52,199,89,0.08)", color:"#32D74B", border:"1px solid rgba(52,199,89,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Resolve</button>
+                          <button title="Not a real threat: normal behaviour flagged by mistake." onClick={()=>acknowledgeAlert(a.id,"false_positive").then(load)}
+                            style={{ fontSize:10, background:"#2C2C2E", color:"#D1D1D6", border:"1px solid #48484A", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>False +</button>
                         </div>
                       ) : (
-                        <div style={{ fontSize:11, color:"#6C6C70", lineHeight:1.5 }}>
-                          <div style={{ fontWeight:600, color: a.status==="resolved" ? "#1A7A34" : a.status==="acknowledged" ? "#B25000" : "#6C6C70" }}>
+                        <div style={{ fontSize:11, color:"#D1D1D6", lineHeight:1.5 }}>
+                          <div style={{ fontWeight:600, color: a.status==="resolved" ? "#32D74B" : a.status==="acknowledged" ? "#FF9F0A" : "#D1D1D6" }}>
                             {a.status==="false_positive" ? "Marked FP" : a.status==="resolved" ? "✓ Resolved" : "⏸ Acknowledged"}
                           </div>
                           {a.acknowledged_by && (
-                            <div style={{ fontSize:10, color:"#6C6C70", marginTop:2 }}>
+                            <div style={{ fontSize:10, color:"#D1D1D6", marginTop:2 }}>
                               by {a.acknowledged_by}
                               {a.acknowledged_at && <span> · {fmtTime(a.acknowledged_at)}</span>}
                             </div>

@@ -33,33 +33,33 @@ export default function PLCChart() {
   const avg = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
 
   return (
-    <div style={{ background:"#FFFFFF", border:"1px solid #D1D1D6", borderRadius:14, padding:20, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+    <div style={{ background:"#1C1C1E", border:"1px solid #48484A", borderRadius:14, padding:20, boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ position:"relative", display:"inline-flex", width:10, height:10 }}>
             <span style={{ position:"absolute", inset:0, borderRadius:"50%", background: error ? "#FF3B30" : "#34C759", opacity:0.6, animation:"ping 1.2s infinite" }}/>
             <span style={{ position:"relative", display:"inline-block", borderRadius:"50%", width:10, height:10, background: error ? "#FF3B30" : "#34C759" }}/>
           </span>
-          <span style={{ fontSize:13, fontWeight:600, color:"#1C1C1E" }}>PLC Live — Modbus HR0</span>
-          <span style={{ fontSize:11, color:"#6C6C70", fontFamily:"'JetBrains Mono',monospace" }}>172.28.240.211:502</span>
+          <span style={{ fontSize:13, fontWeight:600, color:"#F5F5F7" }}>PLC Live — Modbus HR0</span>
+          <span style={{ fontSize:11, color:"#D1D1D6", fontFamily:"'JetBrains Mono',monospace" }}>172.28.240.211:502</span>
         </div>
         <div>
           {lastVal !== null && <span style={{ fontSize:26, fontWeight:700, color:"#007AFF", fontFamily:"'JetBrains Mono',monospace" }}>{lastVal}</span>}
-          {error && <span style={{ fontSize:11, color:"#CC2A20", marginLeft:8 }}>⚠ {error}</span>}
+          {error && <span style={{ fontSize:11, color:"#FF6B61", marginLeft:8 }}>⚠ {error}</span>}
         </div>
       </div>
 
       {data.length===0 && !error ? (
-        <div style={{ height:160, display:"flex", alignItems:"center", justifyContent:"center", color:"#6C6C70", fontSize:13 }}>Waiting for PLC data…</div>
+        <div style={{ height:160, display:"flex", alignItems:"center", justifyContent:"center", color:"#D1D1D6", fontSize:13 }}>Waiting for PLC data…</div>
       ) : (
         <ResponsiveContainer width="100%" height={160}>
           <LineChart data={data} margin={{ top:4, right:8, left:-20, bottom:0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F2F2F7" />
-            <XAxis dataKey="t" tickFormatter={fmt} tick={{ fill:"#6C6C70", fontSize:10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill:"#6C6C70", fontSize:10 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2C2C2E" />
+            <XAxis dataKey="t" tickFormatter={fmt} tick={{ fill:"#D1D1D6", fontSize:10 }} interval="preserveStartEnd" />
+            <YAxis tick={{ fill:"#D1D1D6", fontSize:10 }} />
             <Tooltip
-              contentStyle={{ background:"#FFFFFF", border:"1px solid #D1D1D6", borderRadius:10, boxShadow:"0 4px 12px rgba(0,0,0,0.1)" }}
-              labelStyle={{ color:"#6C6C70", fontSize:11 }}
+              contentStyle={{ background:"#1C1C1E", border:"1px solid #48484A", borderRadius:10, boxShadow:"0 4px 12px rgba(0,0,0,0.1)" }}
+              labelStyle={{ color:"#D1D1D6", fontSize:11 }}
               itemStyle={{ color:"#007AFF" }}
               labelFormatter={fmt}
               formatter={(v: number) => [v, "Register value"]}
@@ -72,7 +72,7 @@ export default function PLCChart() {
           </LineChart>
         </ResponsiveContainer>
       )}
-      <p style={{ fontSize:11, color:"#6C6C70", marginTop:8, textAlign:"right" }}>
+      <p style={{ fontSize:11, color:"#D1D1D6", marginTop:8, textAlign:"right" }}>
         Live poll 2.5 s · {data.length}/{MAX_POINTS} pts · real Modbus reads
       </p>
     </div>

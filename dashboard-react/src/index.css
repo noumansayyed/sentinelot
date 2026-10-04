@@ -1,7 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  background-color: #F2F2F7;
-  color: #1C1C1E;
+  background-color: #111113;
+  color: #F5F5F7;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -9,7 +9,7 @@ body {
 .font-mono { font-family: 'JetBrains Mono', monospace; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 @keyframes blink {
   0%,100% { opacity:1; transform:scale(1); }
   50% { opacity:0.4; transform:scale(0.85); }
@@ -28,3 +28,5 @@ body {
   0%,100% { border-bottom-color: rgba(255,59,48,0.4); }
   50% { border-bottom-color: rgba(255,59,48,0.9); }
 }
+
+html.light-theme { filter: invert(1) hue-rotate(180deg); background:#fff; }
