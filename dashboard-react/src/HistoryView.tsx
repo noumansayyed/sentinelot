@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { REGISTRY, HAS_REG, isKnown } from "./LiveView";
-import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
+import { fetchAlerts, fetchAssets, Alert, Asset } from "./api";
+import { actAlert } from "./audit";
 
 export function cleanDesc(desc: string): string {
   return desc.replace(/\s+at\s+\d{4}-\d{2}-\d{2}T[\d:.]+([+-]\d{2}:\d{2}|Z)/g, "").replace(/\s{2,}/g," ").trim();
@@ -201,11 +202,11 @@ export default function HistoryView({ card }: Props) {
                     <td style={{ padding:"11px 14px", minWidth:160 }}>
                       {a.status==="open" ? (
                         <div style={{ display:"flex", gap:6 }}>
-                          <button title="I have seen this alert and am investigating. Alert stays open." onClick={()=>acknowledgeAlert(a.id,"acknowledged").then(load)}
+                          <button title="I have seen this alert and am investigating. Alert stays open." onClick={()=>actAlert(a,"acknowledged",load)}
                             style={{ fontSize:10, background:"rgba(255,149,0,0.08)", color:"#FF9F0A", border:"1px solid rgba(255,149,0,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Ack</button>
-                          <button title="Problem fixed or confirmed harmless. Alert is closed." onClick={()=>acknowledgeAlert(a.id,"resolved").then(load)}
+                          <button title="Problem fixed or confirmed harmless. Alert is closed." onClick={()=>actAlert(a,"resolved",load)}
                             style={{ fontSize:10, background:"rgba(52,199,89,0.08)", color:"#32D74B", border:"1px solid rgba(52,199,89,0.3)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Resolve</button>
-                          <button title="Not a real threat: normal behaviour flagged by mistake." onClick={()=>acknowledgeAlert(a.id,"false_positive").then(load)}
+                          <button title="Not a real threat: normal behaviour flagged by mistake." onClick={()=>actAlert(a,"false_positive",load)}
                             style={{ fontSize:10, background:"#2C2C2E", color:"#D1D1D6", border:"1px solid #48484A", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>False +</button>
                         </div>
                       ) : (
@@ -213,6 +214,9 @@ export default function HistoryView({ card }: Props) {
                           <div style={{ fontWeight:600, color: a.status==="resolved" ? "#32D74B" : a.status==="acknowledged" ? "#FF9F0A" : "#D1D1D6" }}>
                             {a.status==="false_positive" ? "Marked FP" : a.status==="resolved" ? "✓ Resolved" : "⏸ Acknowledged"}
                           </div>
+                          <select value="" onChange={e=>{ if(e.target.value) actAlert(a, e.target.value as any, load); }} style={{ fontSize:10, marginTop:4, background:"#2C2C2E", color:"#F5F5F7", border:"1px solid #48484A", borderRadius:6, padding:"2px 6px" }}>
+                            <option value="">Change action…</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option><option value="false_positive">False positive</option>
+                          </select>
                           {a.acknowledged_by && (
                             <div style={{ fontSize:10, color:"#D1D1D6", marginTop:2 }}>
                               by {a.acknowledged_by}

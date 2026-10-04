@@ -1,5 +1,6 @@
 import { cleanDesc } from "./HistoryView";
 import { useEffect, useRef, useState } from "react";
+import { who, why, addAudit, actAlert } from "./audit";
 import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
 import PLCChart from "./components/PLCChart";
 
@@ -60,6 +61,12 @@ export function setKnown(ip:string, known:boolean){
   const l=getApprovalLog(); l.push({ip,action:known?"Approved (UNKNOWN to KNOWN)":"Revoked (KNOWN to UNKNOWN)",by:"operator",at});
   localStorage.setItem(LS_L,JSON.stringify(l));
 }
+function changeKnown(ip:string, wasKnown:boolean){
+  const by=who(); if(!by) return;
+  const reason=why(); if(!reason) return;
+  setKnown(ip,!wasKnown);
+  addAudit({at:new Date().toISOString(),by,kind:"device",target:ip,from:wasKnown?"KNOWN":"UNKNOWN",to:wasKnown?"UNKNOWN":"KNOWN",reason});
+}
 const PROTOCOLS = [
   { name:"Modbus TCP", port:"TCP 502",   flow:"PLC .211 → HMI .212",  color:"#007AFF", icon:"⚡" },
   { name:"S7comm",     port:"TCP 102",   flow:"S7-PLC → Client",       color:"#FF9500", icon:"🔧" },
@@ -102,7 +109,7 @@ function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: 
   const seen = devs.length > 0;
   const [,force] = useState(0);
   return (
-    <div style={{ background:"#1C1C1E", border:"1px solid #48484A", borderRadius:14, padding:16 }}>
+    <div style={{ background:"#1C1C1E", border:"1px solid #48484A", borderRadius:14, padding:16, maxHeight:300, overflowY:"auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span style={{ fontSize:13, fontWeight:700, color:"#F5F5F7" }}>{p.icon} {p.name}</span>
         <span style={{ fontSize:10, color:p.color, background:`${p.color}15`, border:`1px solid ${p.color}40`, padding:"3px 8px", borderRadius:6, fontWeight:600 }}>{p.port}</span>
@@ -125,7 +132,7 @@ function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: 
               {HAS_REG && <span style={{ fontSize:10, fontWeight:700, padding:"1px 8px", borderRadius:999, color:known?"#32D74B":"#FF6B61", background:known?"rgba(52,199,89,0.1)":"rgba(255,59,48,0.1)" }}>{known?"KNOWN":"UNKNOWN"}</span>}
             </div>
             <div>{r ? r.role : "Not in approved baseline"}</div>
-            <button title={known?"Remove from approved list":"Add to approved list"} onClick={()=>{setKnown(d.ip_address,!known);force(x=>x+1);}} style={{marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:6,border:"1px solid #48484A",background:"#2C2C2E",cursor:"pointer"}}>{known?"Mark UNKNOWN":"Approve as KNOWN"}</button>
+            <button title={known?"Remove from approved list":"Add to approved list"} onClick={()=>{changeKnown(d.ip_address,known);force(x=>x+1);}} style={{marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:6,border:"1px solid #48484A",background:"#2C2C2E",cursor:"pointer"}}>{known?"Mark UNKNOWN":"Approve as KNOWN"}</button>
             <div style={{ color:"#D1D1D6" }}>{live ? "active now" : `last seen ${timeAgo(d.last_seen)}`} · {da.length ? `${da.length} alert${da.length>1?"s":""}: ${Array.from(new Set(da.map(a=>alertReason(a.description)))).join(", ")}` : "no alerts"}</div>
           </div>
         );
@@ -207,7 +214,7 @@ export default function LiveView({ card }: Props) {
       <div style={{ ...card, padding:20 }}>
         <div style={{ fontSize:14, fontWeight:700, color:"#F5F5F7", marginBottom:4 }}>Industrial Protocol Parser Matrix</div>
         <div style={{ fontSize:12, color:"#D1D1D6", marginBottom:16 }}>Devices discovered per protocol · passive Zeek + ICSNPP inspection · no packets injected onto OT network</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:14 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
           {PROTOCOLS.map(p => <ProtoMatrixCard key={p.name} p={p} assets={assets} open={open} />)}
         </div>
       </div>
@@ -251,7 +258,7 @@ export default function LiveView({ card }: Props) {
                     <div><b>AI advice:</b> {recommendedAction(a)}</div>
                     <div style={{ display:"flex", gap:6, marginTop:6 }}>
                       {[["Acknowledge","acknowledged"],["Resolve","resolved"],["False +","false_positive"]].map(([l,st]) => (
-                        <button key={l} title={TIPS[l]} onClick={() => acknowledgeAlert(a.id, st as any).then(refresh)} style={{ flex:1, fontSize:11, background:"#2C2C2E", border:"1px solid #48484A", borderRadius:8, padding:"5px 0", cursor:"pointer" }}>{l}</button>
+                        <button key={l} title={TIPS[l]} onClick={() => actAlert(a, st as any, refresh)} style={{ flex:1, fontSize:11, background:"#2C2C2E", border:"1px solid #48484A", borderRadius:8, padding:"5px 0", cursor:"pointer" }}>{l}</button>
                       ))}
                     </div>
                   </div>
@@ -261,13 +268,6 @@ export default function LiveView({ card }: Props) {
             </div>
           );
         })}
-      </div>
-      <div style={{ ...card, padding:16 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:"#F5F5F7" }}>Device Approval History</div>
-        {getApprovalLog().length===0 ? <div style={{ fontSize:12, color:"#D1D1D6", marginTop:6 }}>No changes yet. Use the Approve / Mark UNKNOWN buttons on a device.</div> :
-          getApprovalLog().slice().reverse().slice(0,8).map((e,i) => (
-            <div key={i} style={{ fontSize:12, marginTop:6, color:"#D1D1D6" }}><b>{e.ip}</b> · {e.action} · by {e.by} · {new Date(e.at).toLocaleString()}</div>
-          ))}
       </div>
       {/* device grid */}
       <div style={{ fontSize:14, fontWeight:700, color:"#F5F5F7" }}></div>

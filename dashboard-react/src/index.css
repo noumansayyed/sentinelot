@@ -7,7 +7,7 @@ body {
   min-height: 100vh;
 }
 .font-mono { font-family: 'JetBrains Mono', monospace; }
-::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 @keyframes blink {
