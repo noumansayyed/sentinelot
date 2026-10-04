@@ -84,7 +84,7 @@ def _offhrs_ok(event):
 
 def is_off_hours(ts: datetime) -> bool:
     from datetime import timedelta as _td; local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
-    return local_hour < 6 or local_hour >= 14
+    return local_hour < 6 or local_hour >= 22
 
 
 def is_write_command(function_code: str | None) -> bool:
