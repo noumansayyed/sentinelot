@@ -76,3 +76,10 @@ Not in git (set up by hand on a new machine):
 1. Open http://localhost:8090/dashboard and log in.
 2. Programs, then upload `zeek-lab/openplc-program/simple_plc.st`, then compile.
 3. Press Start PLC. Modbus register 0 now counts up and wraps.
+
+## Keycloak login on a new machine
+
+`setup/keycloak-realm.json` holds the realm `sentinelot` and its clients (exported without users or secrets).
+1. Open http://localhost:8080, log in as admin, create a realm, and import that file.
+2. Create the user `operator` (password in your notes) and set it as non-temporary.
+3. Confirm the client `sentinelot-dashboard` allows direct access (password) grants.
