@@ -40,3 +40,21 @@ and enough RAM for the local LLM (ollama). Then:
 3. Build the local images (real-sensor, opcua-server, telemetry-api, dashboard-react, and the lab devices) from their Dockerfiles.
 4. Pull the ollama model used by llm-triage.
 5. Run start.sh, then start the PLC program from http://localhost:8090/dashboard.
+
+## What is in git and what is not
+
+In git: all lab device code (zeek-lab/), the sensor, bridges, services, dashboard, and the counter
+program for the PLC: `zeek-lab/openplc-program/simple_plc.st`.
+
+Not in git (set up by hand on a new machine):
+- `.env` (secrets). Copy it from the old machine; the key names are in `.env.example`.
+- Lab container settings (IPs, images, mounts): see `setup/lab-containers.txt`.
+- Lab network command: see `setup/network.txt` (change `parent=` to the new machine's interface).
+- Keycloak realm `sentinelot` and user `operator`: stored in a Docker volume unless exported.
+- Ollama model: `docker exec ollama ollama pull qwen2.5:1.5b`
+
+## Loading the counter program into OpenPLC
+
+1. Open http://localhost:8090/dashboard and log in.
+2. Programs, then upload `zeek-lab/openplc-program/simple_plc.st`, then compile.
+3. Press Start PLC. Modbus register 0 now counts up and wraps.

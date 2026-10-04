@@ -1,0 +1,30 @@
+/conn-bridge | image=sentinelot-zeek-bridge | ip= | netmode=sentinelot_default | cmd=[python -u /app/conn_bridge.py] | mounts=/home/dev/sentinelot/zeek-lab/real-sensor/logs:/logs /home/dev/sentinelot/zeek-bridge/conn_bridge.py:/app/conn_bridge.py 
+/dashboard-react | image=sentinelot-dashboard-react | ip= | netmode=bridge | cmd=[nginx -g daemon off;] | mounts=/home/dev/sentinelot/reports:/usr/share/nginx/html/reports 
+/dnp3-client | image=sentinelot-dnp3-client | ip=172.28.240.218 | netmode=sentinelot-net | cmd=[python dnp3_client.py] | mounts=
+/hmi-device | image=sentinelot-hmi | ip=172.28.240.212 | netmode=sentinelot-net | cmd=[python hmi.py] | mounts=
+/iiot-sensor | image=sentinelot-iiot-sensor | ip=172.28.240.217 | netmode=sentinelot-net | cmd=[python sensor.py] | mounts=
+/llm-triage | image=sentinelot-llm-triage | ip= | netmode=sentinelot_default | cmd=[python main.py] | mounts=
+/loving_easley | image=hello-world | ip= | netmode=bridge | cmd=[/hello] | mounts=
+/ollama | image=ollama/ollama | ip= | netmode=bridge | cmd=[serve] | mounts=/var/lib/docker/volumes/ollama_data/_data:/root/.ollama 
+/opcua-client | image=sentinelot-opcua-client | ip=172.28.240.220 | netmode=sentinelot-net | cmd=[python client.py] | mounts=
+/opcua-server | image=sentinelot-opcua-server | ip= | netmode=container:db4aeed88b76505f82d1f9c33ade8c2d00c6a32ef03e1e7adc0040c739fe57cf | cmd=[python server.py] | mounts=
+/plc-modbus | image=tuttas/openplc_v3 | ip=172.28.240.211 | netmode=sentinelot-net | cmd=[/root/OpenPLC_v3/start_openplc.sh] | mounts=
+/plc-relay | image=alpine | ip=172.28.240.2 | netmode=bridge | cmd=[sh -c apk add --no-cache socat >/dev/null 2>&1 && socat TCP-LISTEN:8090,fork,reuseaddr,bind=0.0.0.0 TCP:172.28.240.211:8080] | mounts=
+/real-sensor | image=sentinelot-real-sensor | ip= | netmode=container:db4aeed88b76505f82d1f9c33ade8c2d00c6a32ef03e1e7adc0040c739fe57cf | cmd=[/run.sh] | mounts=/home/dev/sentinelot/zeek-lab/real-sensor/logs:/logs 
+/rogue-device | image=sentinelot-rogue | ip=invalid IP | netmode=sentinelot-net | cmd=[python rogue.py] | mounts=
+/s7-client | image=sentinelot-s7-client | ip=172.28.240.214 | netmode=sentinelot-net | cmd=[python s7_client.py] | mounts=
+/s7-plc | image=sentinelot-s7-plc | ip= | netmode=container:db4aeed88b76505f82d1f9c33ade8c2d00c6a32ef03e1e7adc0040c739fe57cf | cmd=[python s7_server.py] | mounts=
+/sentinelot-backend-1 | image=sentinelot-backend | ip= | netmode=sentinelot_default | cmd=[uvicorn app.main:app --host 0.0.0.0 --port 8000] | mounts=
+/sentinelot-frontend-1 | image=node:22-alpine | ip= | netmode=sentinelot_default | cmd=[sh -c npm install && npm run dev -- --host 0.0.0.0] | mounts=/home/kali/SentinelOT/frontend:/app 
+/sentinelot-ingestion-api-1 | image=sentinelot-ingestion-api | ip= | netmode=sentinelot_default | cmd=[uvicorn main:app --host 0.0.0.0 --port 8000] | mounts=
+/sentinelot-keycloak-1 | image=quay.io/keycloak/keycloak:25.0 | ip= | netmode=sentinelot_default | cmd=[start-dev] | mounts=
+/sentinelot-minio-1 | image=minio/minio:RELEASE.2024-10-13T13-34-11Z | ip= | netmode=sentinelot_default | cmd=[server /data --console-address :9001] | mounts=/var/lib/docker/volumes/sentinelot_miniodata/_data:/data 
+/sentinelot-postgres-1 | image=timescale/timescaledb:2.15.3-pg16 | ip= | netmode=sentinelot_default | cmd=[postgres] | mounts=/run/desktop/mnt/host/wsl/docker-desktop-bind-mounts/Ubuntu/f16744d070dd433de59ed95737babd55a375cd216dc9ddb3c7a4d1550519cc9c:/docker-entrypoint-initdb.d/01_schema.sql /var/lib/docker/volumes/sentinelot_pgdata/_data:/var/lib/postgresql/data 
+/sentinelot-redis-1 | image=redis:7.4-alpine | ip= | netmode=sentinelot_default | cmd=[redis-server --requirepass change_me_dev_only] | mounts=/var/lib/docker/volumes/c599bf13741c8de02a8d7955ee18bed43fa1c6eddf8692bd033dae4373b1400d/_data:/data 
+/sentinelot-redpanda-1 | image=redpandadata/redpanda:v24.2.7 | ip= | netmode=sentinelot_default | cmd=[redpanda start --smp=1 --memory=1G --overprovisioned --node-id=0 --kafka-addr=PLAINTEXT://0.0.0.0:9092 --advertise-kafka-addr=PLAINTEXT://redpanda:9092] | mounts=/var/lib/docker/volumes/68ea02850585b2265a8fd698eeda99bcb7b7a6f0d4a30c2b1ed282c9bba47582/_data:/var/lib/redpanda/data 
+/sentinelot-run | image=sentinelot-combined | ip= | netmode=bridge | cmd=[/app/run.sh] | mounts=/home/dev/sentinelot/zeek-lab/combined/logs:/logs 
+/sentinelot-simulator-1 | image=sentinelot-simulator | ip= | netmode=sentinelot_default | cmd=[python simulator.py] | mounts=
+/sentinelot-stream-processor-1 | image=sentinelot-stream-processor | ip= | netmode=sentinelot_default | cmd=[python main.py] | mounts=
+/sentinelot-worker-1 | image=sentinelot-worker | ip= | netmode=sentinelot_default | cmd=[python -m app.worker] | mounts=
+/telemetry-api | image=sentinelot-telemetry-api | ip=172.28.240.221 | netmode=sentinelot_default | cmd=[uvicorn main:app --host 0.0.0.0 --port 8001] | mounts=
+/zeek-bridge | image=sentinelot-zeek-bridge | ip= | netmode=sentinelot_default | cmd=[python bridge.py] | mounts=/home/dev/sentinelot/zeek-lab/real-sensor/logs:/home/dev/sentinelot/zeek-lab/real-sensor/logs 

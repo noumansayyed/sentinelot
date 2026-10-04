@@ -1,0 +1,1 @@
+docker network create -d macvlan --subnet=172.28.240.0/20 --gateway=172.28.240.1 -o parent=eth0 sentinelot-net
