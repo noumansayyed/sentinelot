@@ -246,7 +246,7 @@ export default function LiveView({ card }: Props) {
               </div>
               <div style={{ fontSize:11, color:"#D1D1D6", marginTop:4 }}>{cat.meaning}</div>
               {list.length===0 && <div style={{ fontSize:11, color:"#32D74B", marginTop:10 }}>None right now.</div>}
-              {list.slice(0,3).map(a => {
+              <div style={{ maxHeight:470, overflowY:"auto", paddingRight:4 }}>{list.map(a => {
                 const dev = assets.find(x => a.description.includes(x.ip_address));
                 const ip = dev?.ip_address || "";
                 const r = REGISTRY[ip];
@@ -264,7 +264,7 @@ export default function LiveView({ card }: Props) {
                   </div>
                 );
               })}
-              {list.length>3 && <div style={{ fontSize:11, color:"#D1D1D6", marginTop:8 }}>+ {list.length-3} more (see Historical Analytics)</div>}
+              </div>
             </div>
           );
         })}
