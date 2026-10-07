@@ -52,6 +52,7 @@ services:
       - "8080:8080"
 
   minio:
+    profiles: ["storage"]
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
