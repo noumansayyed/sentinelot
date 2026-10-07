@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run from ~/sentinelot after: .env created, network created (see README)
-set -e; cd ~/sentinelot
+set -e; cd ~/sentinelot; sudo chown -R $USER:$USER ~/sentinelot
 echo "== build images"
 docker build -t sentinelot-zeek-icsnpp -t sentinelot-zeek-lab zeek-lab || true
 for p in hmi-device:sentinelot-hmi rogue-device:sentinelot-rogue dnp3-client:sentinelot-dnp3-client iiot-sensor:sentinelot-iiot-sensor opcua-client:sentinelot-opcua-client opcua-server:sentinelot-opcua-server real-sensor:sentinelot-real-sensor s7-client:sentinelot-s7-client s7-plc:sentinelot-s7-plc; do
@@ -8,7 +8,8 @@ for p in hmi-device:sentinelot-hmi rogue-device:sentinelot-rogue dnp3-client:sen
 for p in services/telemetry-api:sentinelot-telemetry-api services/llm-triage:sentinelot-llm-triage services/compliance-report:sentinelot-compliance-report dashboard-react:sentinelot-dashboard-react zeek-bridge:sentinelot-zeek-bridge; do
   [ -f ${p%%:*}/Dockerfile ] && docker build -t ${p##*:} ${p%%:*} || echo "skip ${p%%:*}"; done
 echo "== core services"; docker compose up -d --build
-echo "== lab containers"; bash setup/recreate-lab.sh
+echo "== database fixes"; sleep 20; bash setup/fix-db.sh
+echo "== lab containers"; bash setup/recreate-lab.sh || true
 sleep 10; echo "== AI model"; docker exec ollama ollama pull qwen2.5:1.5b || true
 echo "== login (Keycloak)"; sleep 40
 PW=$(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2-)
