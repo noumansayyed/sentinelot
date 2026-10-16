@@ -1,7 +1,7 @@
 import { cleanDesc } from "./HistoryView";
 import { useEffect, useRef, useState } from "react";
 import { who, why, addAudit, actAlert } from "./audit";
-import { fetchAlerts, fetchAssets, acknowledgeAlert, Alert, Asset } from "./api";
+import { fetchAlerts, fetchAssets, acknowledgeAlert, fetchProtocolActivity, Alert, Asset, ProtocolActivity } from "./api";
 import PLCChart from "./components/PLCChart";
 
 function timeAgo(iso: string) {
@@ -102,29 +102,60 @@ export function ProtocolCard({ p }: { p: typeof PROTOCOLS[0] }) {
   );
 }
 
-function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: Asset[]; open: Alert[] }) {
+function ProtoMatrixCard({
+  p, assets, open, activity,
+}: {
+  p: typeof PROTOCOLS[0];
+  assets: Asset[];
+  open: Alert[];
+  activity: ProtocolActivity;
+}) {
   const keys: Record<string,string> = { "Modbus TCP":"modbus", "S7comm":"s7", "DNP3":"dnp3", "OPC-UA":"opc" };
   const k = keys[p.name];
-  const devs = assets.filter(a => (a.protocols||[]).some(x => x.toLowerCase().replace(/[^a-z0-9]/g,"").includes(k)));
-  const seen = devs.length > 0;
+  const live = activity.by_protocol[k] || [];
+
+  // Map asset_id -> live entry (real event count + real last_seen)
+  const liveByAsset = new Map(live.map(e => [e.asset_id, e]));
   const [,force] = useState(0);
+
+  // Only show assets that ACTUALLY had events for this protocol in the window
+  const devs = assets.filter(a => {
+    // find this asset's id by ip — the /assets endpoint returns ip_address, but
+    // activity returns asset_id; we match via ip lookup against the alert/asset list.
+    // Simpler: match assets whose id is in liveByAsset. We need asset.id; if not
+    // present, fall back to matching by ip_address if the backend returns it.
+    const id = (a as any).id;
+    return id && liveByAsset.has(id);
+  });
+
+  // Protocol for this card (for filtering alerts)
+  const protoNames: Record<string,string[]> = {
+    modbus: ["modbus_tcp", "modbus"],
+    s7:     ["s7comm", "s7"],
+    dnp3:   ["dnp3"],
+    opc:    ["opcua", "opc"],
+  };
+  const thisProto = protoNames[k] || [k];
+
   return (
     <div style={{ background:"#1C1C1E", border:"1px solid #48484A", borderRadius:14, padding:16, maxHeight:300, overflowY:"auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span style={{ fontSize:13, fontWeight:700, color:"#F5F5F7" }}>{p.icon} {p.name}</span>
         <span style={{ fontSize:10, color:p.color, background:`${p.color}15`, border:`1px solid ${p.color}40`, padding:"3px 8px", borderRadius:6, fontWeight:600 }}>{p.port}</span>
       </div>
-      <div style={{ fontSize:11, fontWeight:600, marginTop:8, color: seen ? "#32D74B" : "#C7C7CC" }}>
-        {seen ? `● ACTIVE · ${devs.length} device${devs.length>1?"s":""} seen${k!=="modbus"?" · connection-level":""}` : "○ NO TRAFFIC SEEN"}
+      <div style={{ fontSize:11, fontWeight:600, marginTop:8, color: devs.length ? "#32D74B" : "#C7C7CC" }}>
+        {devs.length ? `● ACTIVE · ${devs.length} device${devs.length>1?"s":""} seen in last 5 min` : "○ NO TRAFFIC SEEN IN LAST 5 MIN"}
       </div>
-      {false && Object.entries(REGISTRY).filter(([ip,v]) => v.name.toLowerCase().includes(k==="opc"?"opcua":k==="s7"?"s7":k==="dnp3"?"dnp3":"zzz")).map(([ip,v]) => (
-        <div key={ip} style={{ marginTop:8, fontSize:11, color:"#D1D1D6" }}><b style={{fontFamily:"monospace"}}>{ip}</b> · {v.role}<br/>connections seen on {p.port} (Zeek conn.log), no parsed messages</div>
-      ))}
       {devs.map((d, idx) => {
+        const id = (d as any).id;
+        const liveEntry = id ? liveByAsset.get(id) : undefined;
         const r = REGISTRY[d.ip_address];
         const known = isKnown(d.ip_address);
-        const da = open.filter(a => a.description.includes(d.ip_address));
-        const live = (Date.now()-new Date(d.last_seen).getTime())/1000 < 15;
+        // Alerts: only those whose description names THIS protocol
+        const da = open.filter(a =>
+          a.description.includes(d.ip_address) &&
+          thisProto.some(pn => a.description.toLowerCase().includes(pn))
+        );
         return (
           <div key={d.ip_address} style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #3A3A3C", fontSize:11, color:"#D1D1D6", lineHeight:1.6 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -132,28 +163,31 @@ function ProtoMatrixCard({ p, assets, open }: { p: typeof PROTOCOLS[0]; assets: 
               {HAS_REG && <span style={{ fontSize:10, fontWeight:700, padding:"1px 8px", borderRadius:999, color:known?"#32D74B":"#FF6B61", background:known?"rgba(52,199,89,0.1)":"rgba(255,59,48,0.1)" }}>{known?"KNOWN":"UNKNOWN"}</span>}
             </div>
             <div>{r ? r.role : "Not in approved baseline"}</div>
-            <button title={known?"Remove from approved list":"Add to approved list"} onClick={()=>{changeKnown(d.ip_address,known);force(x=>x+1);}} style={{marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:6,border:"1px solid #48484A",background:"#2C2C2E",cursor:"pointer"}}>{known?"Mark UNKNOWN":"Approve as KNOWN"}</button>
-            <div style={{ color:"#D1D1D6" }}>{live ? "active now" : `last seen ${timeAgo(d.last_seen)}`} · {da.length ? `${da.length} alert${da.length>1?"s":""}: ${Array.from(new Set(da.map(a=>alertReason(a.description)))).join(", ")}` : "no alerts"}</div>
+            <button title={known?"Remove from approved list":"Add to approved list"} onClick={()=>{changeKnown(d.ip_address,known);force((x:number)=>x+1);}} style={{marginTop:4,fontSize:10,padding:"2px 8px",borderRadius:6,border:"1px solid #48484A",background:"#2C2C2E",cursor:"pointer"}}>{known?"Mark UNKNOWN":"Approve as KNOWN"}</button>
+            <div style={{ color:"#D1D1D6" }}>
+              {liveEntry ? `${liveEntry.events} events · last seen ${timeAgo(liveEntry.last_seen)}` : "no events in window"}
+              {da.length ? ` · ${da.length} alert${da.length>1?"s":""}: ${Array.from(new Set(da.map(a=>alertReason(a.description)))).join(", ")}` : " · no alerts"}
+            </div>
           </div>
         );
       })}
     </div>
   );
 }
-
 interface Props { card: React.CSSProperties }
 
 export default function LiveView({ card }: Props) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [protocolActivity, setProtocolActivity] = useState<ProtocolActivity>({window_sec:300, by_protocol:{}});
   const [lastUpdated, setLastUpdated] = useState("");
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
 
   async function refresh() {
     try {
-      const [a, s] = await Promise.all([fetchAlerts(), fetchAssets()]);
-      setAlerts(a); setAssets(s);
+      const [a, s, pa] = await Promise.all([fetchAlerts(), fetchAssets(), fetchProtocolActivity()]);
+      setAlerts(a); setAssets(s); setProtocolActivity(pa);
       setLastUpdated(new Date().toLocaleTimeString());
       setError("");
     } catch(e:any) { setError(e.message); }
@@ -163,7 +197,9 @@ export default function LiveView({ card }: Props) {
   const open = alerts.filter(a => a.status==="open");
   const counts = { critical:0, high:0, medium:0, low:0 } as Record<string,number>;
   open.forEach(a => { counts[a.severity] = (counts[a.severity]||0)+1; });
-  const liveDevices = assets.filter(a => (Date.now()-new Date(a.last_seen).getTime())/1000 < 15).length;
+  const _ids = new Set<string>();
+  Object.values(protocolActivity.by_protocol).forEach((arr:any) => arr.forEach((e:any) => _ids.add(e.asset_id)));
+  const liveDevices = _ids.size;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
@@ -195,7 +231,7 @@ export default function LiveView({ card }: Props) {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14 }}>
         {[
           { label:"DEVICES MONITORED", value:assets.length,    color:"#007AFF", bg:"rgba(0,122,255,0.06)"   },
-          { label:"ACTIVE NOW",        value:liveDevices,      color:"#32D74B", bg:"rgba(52,199,89,0.06)"   },
+          { label:"SEEN IN LAST 60s", value:liveDevices,      color:"#32D74B", bg:"rgba(52,199,89,0.06)"   },
           { label:"OPEN ALERTS",       value:open.length,      color:"#F5F5F7", bg:"#1C1C1E"                },
           { label:"CRITICAL",          value:counts.critical,  color:"#FF6B61", bg:"rgba(255,59,48,0.06)"   },
           { label:"HIGH",              value:counts.high,      color:"#FF9F0A", bg:"rgba(255,149,0,0.06)"   },
@@ -215,7 +251,7 @@ export default function LiveView({ card }: Props) {
         <div style={{ fontSize:14, fontWeight:700, color:"#F5F5F7", marginBottom:4 }}>Industrial Protocol Parser Matrix</div>
         <div style={{ fontSize:12, color:"#D1D1D6", marginBottom:16 }}>Devices discovered per protocol · passive Zeek + ICSNPP inspection · no packets injected onto OT network</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
-          {PROTOCOLS.map(p => <ProtoMatrixCard key={p.name} p={p} assets={assets} open={open} />)}
+          {PROTOCOLS.map(p => <ProtoMatrixCard key={p.name} p={p} assets={assets} open={open} activity={protocolActivity} />)}
         </div>
       </div>
 

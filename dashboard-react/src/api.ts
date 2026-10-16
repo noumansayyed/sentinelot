@@ -52,3 +52,18 @@ export async function acknowledgeAlert(
     body: JSON.stringify({ status, acknowledged_by }),
   });
 }
+
+export interface ProtocolActivityEntry {
+  asset_id: string;
+  last_seen: string;
+  events: number;
+}
+export interface ProtocolActivity {
+  window_sec: number;
+  by_protocol: Record<string, ProtocolActivityEntry[]>;
+}
+export async function fetchProtocolActivity(windowSec = 300): Promise<ProtocolActivity> {
+  const res = await authed(`${API_BASE}/v1/sites/${SITE_ID}/protocols/activity?window_sec=${windowSec}`);
+  if (!res.ok) throw new Error(`protocols HTTP ${res.status}`);
+  return await res.json();
+}

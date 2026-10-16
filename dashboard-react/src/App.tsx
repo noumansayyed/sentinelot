@@ -5,7 +5,7 @@ import LiveView from "./LiveView";
 import HistoryView from "./HistoryView";
 import AuditView from "./AuditView";
 
-type Tab = "live" | "history" | "audit";
+type Tab = "live" | "history" | "audit" | "compliance";
 
 // Strip " at 2026-09-26T05:56:47+00:00" or " at 2026-09-26T05:56:47Z" anywhere in string
 
@@ -105,7 +105,7 @@ export default function App() {
         </div>
 
         <nav style={{ display:"flex", background:"#2C2C2E", padding:4, borderRadius:12, border:"1px solid #48484A", gap:4 }}>
-          {(["live","history","audit"] as Tab[]).map(t => (
+          {(["live","history","audit","compliance"] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: tab===t ? "#1C1C1E" : "transparent",
               border: tab===t ? "1px solid #48484A" : "1px solid transparent",
@@ -114,7 +114,7 @@ export default function App() {
               fontWeight: tab===t ? 600 : 500, cursor:"pointer",
               boxShadow: tab===t ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
             }}>
-              {t==="live" ? "Live Command" : t==="history" ? "Historical Analytics" : "Audit Report"}
+              {t==="live" ? "Live Command" : t==="history" ? "Historical Analytics" : t==="audit" ? "Audit Report" : "Compliance Report"}
             </button>
           ))}
         </nav>
@@ -128,7 +128,16 @@ export default function App() {
       </header>
 
       <main style={{ padding:24, maxWidth:1600, margin:"0 auto", width:"100%", flex:1 }}>
-        {tab==="live" ? <LiveView card={card} /> : tab==="history" ? <HistoryView card={card} /> : <AuditView card={card} />}
+        {tab==="live" ? <LiveView card={card} /> :
+         tab==="history" ? <HistoryView card={card} /> :
+         tab==="audit" ? <AuditView card={card} /> :
+         <div style={{...card, padding:0, overflow:"hidden"}}>
+           <div style={{padding:"12px 20px", borderBottom:"1px solid #3A3A3C", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+             <span style={{fontWeight:700}}>CERT-In / DPDPA-aligned Compliance Report</span>
+             <a href="/reports/compliance_report.html" target="_blank" rel="noreferrer" style={{color:"#007AFF", fontSize:12}}>Open in new tab ↗</a>
+           </div>
+           <iframe src="/reports/compliance_report.html" style={{width:"100%", height:"75vh", border:"none", background:"#fff"}} title="Compliance Report" />
+         </div>}
       </main>
 
       {/* MODAL */}

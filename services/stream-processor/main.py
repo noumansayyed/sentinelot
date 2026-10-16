@@ -28,11 +28,11 @@ TOPIC = "protocol-events"
 # Minimum samples before we trust a device's baseline enough to alert on
 # it -- avoids false positives from a device's first few, still-settling
 # observations.
-BASELINE_MIN_SAMPLES = 10
+BASELINE_MIN_SAMPLES = 30
 # How many standard deviations from a device's own normal timing counts
 # as a genuine anomaly. 3 is the conventional statistical threshold for
 # "significant deviation" (Chebyshev/normal-distribution heuristic).
-ZSCORE_THRESHOLD = 3.0
+ZSCORE_THRESHOLD = 4.5
 
 
 async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str, protocol: str) -> tuple[UUID, bool]:
@@ -84,7 +84,7 @@ def _offhrs_ok(event):
 
 def is_off_hours(ts: datetime) -> bool:
     from datetime import timedelta as _td; local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
-    return local_hour < 6 or local_hour >= 22
+    return local_hour < 5 or local_hour >= 23
 
 
 def is_write_command(function_code: str | None) -> bool:
@@ -155,7 +155,11 @@ async def update_baseline_and_check(
         mean, m2, count, ts, asset_id,
     )
 
-    is_anomaly = count > BASELINE_MIN_SAMPLES and abs(zscore) > ZSCORE_THRESHOLD
+    is_anomaly = (
+        count > BASELINE_MIN_SAMPLES
+        and abs(zscore) > ZSCORE_THRESHOLD
+        and gap < 21600  # 6h: longer gaps = lab downtime, not attack
+    )
     return is_anomaly, gap, zscore
 
 

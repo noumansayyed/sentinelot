@@ -5,6 +5,7 @@ docker start sentinelot-postgres-1 sentinelot-redpanda-1 sentinelot-redis-1 sent
 waitfor '[ "$(docker inspect -f {{.State.Health.Status}} sentinelot-postgres-1)" = healthy ]' postgres
 waitfor 'curl -sf localhost:8080/realms/sentinelot' keycloak
 docker start ollama sentinelot-ingestion-api-1 >/dev/null; sleep 5
+docker restart zeek-bridge conn-bridge 2>/dev/null || true
 docker restart sentinelot-stream-processor-1 >/dev/null
 docker start llm-triage dashboard-react >/dev/null
 docker start plc-modbus >/dev/null; sleep 10

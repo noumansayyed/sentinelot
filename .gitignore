@@ -9,3 +9,24 @@ __pycache__/
 zeek-lab/real-sensor/logs/
 *.bak*
 validation/output/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local env
+.env
+
+# Zeek/Suricata rotated logs
+zeek-lab/real-sensor/logs/**/*.log
+validation/output/*.log
+
+# Report artifacts generated at runtime
+reports/*.html
+!reports/.gitkeep

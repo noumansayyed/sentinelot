@@ -18,7 +18,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field, field_validator
-
+from protocols import router as protocols_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sentinelot.ingestion")
 
@@ -27,6 +27,7 @@ app = FastAPI(
     version="1.0.0",
     description="Receives OT/IIoT protocol telemetry from edge sensors.",
 )
+app.include_router(protocols_router)
 
 # DEV-ONLY: wide-open CORS so the static dashboard (served from a different
 # origin/port) can call this API directly. Before any real deployment this
