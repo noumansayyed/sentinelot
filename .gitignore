@@ -1,32 +1,27 @@
+# Local env
 .env
-__pycache__/
-*.pyc
-*.bak
-zeek-lab/logs/
-zeek-lab/combined/logs/
-__pycache__/
-*.pyc
-zeek-lab/real-sensor/logs/
-*.bak*
-validation/output/
-
-# Editor / OS
-.DS_Store
-*.swp
-*~
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 
-# Local env
-.env
+# Editor / OS
+.DS_Store
+*.swp
+*~
 
-# Zeek/Suricata rotated logs
+# Backups
+*.bak
+*.bak*
+
+# Zeek / Suricata rotated logs (regenerated at runtime)
+zeek-lab/logs/
+zeek-lab/combined/logs/
+zeek-lab/real-sensor/logs/
 zeek-lab/real-sensor/logs/**/*.log
-validation/output/*.log
+validation/output/
 
-# Report artifacts generated at runtime
+# Runtime-generated report artifacts
 reports/*.html
 !reports/.gitkeep
