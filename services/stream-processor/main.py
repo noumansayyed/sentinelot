@@ -61,37 +61,82 @@ async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str, protocol: str
 
 
 async def insert_alert(
-    pool: asyncpg.Pool, tenant_id: UUID, site_id: UUID, asset_id: UUID,
-    severity: str, description: str,
+    pool: asyncpg.Pool, tenant_id: UUID, site_id: UUID, asset_id: UUID | None,
+    severity: str, description: str, evidence: dict | None = None,
 ) -> None:
+    """
+    Insert-or-consolidate. Same rule+asset+shift => increment recurrence, do not
+    create a new row. This is the production alert model: one action per incident,
+    not one action per occurrence.
+    """
+    # Derive shift_key (12h buckets, UTC): YYYY-MM-DD-H1|H2
+    shift_sql = "to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD') || '-H' || CASE WHEN extract(hour from now() AT TIME ZONE 'UTC') < 12 THEN '1' ELSE '2' END"
+    # Rule family = first 60 chars of description (heuristic; stable enough to group)
+    rule_family = description[:60]
+
+    # Try to find an existing open/acknowledged/escalated alert for the same
+    # (tenant, site, asset, rule_family, shift)
+    existing = await pool.fetchrow(
+        f"""
+        SELECT id, recurrence_count
+        FROM alerts
+        WHERE tenant_id = $1
+          AND site_id   = $2
+          AND asset_id IS NOT DISTINCT FROM $3
+          AND substring(description from 1 for 60) = $4
+          AND shift_key = {shift_sql}
+          AND status IN ('open','acknowledged','escalated')
+        ORDER BY time DESC
+        LIMIT 1
+        """,
+        tenant_id, site_id, asset_id, rule_family,
+    )
+
+    if existing:
+        # CONSOLIDATE: bump recurrence, refresh last_occurrence, append evidence
+        await pool.execute(
+            """
+            UPDATE alerts
+            SET recurrence_count     = recurrence_count + 1,
+                last_occurrence_at   = now(),
+                evidence = COALESCE(evidence, '{}'::jsonb)
+                           || jsonb_build_object(
+                                'last_occurrence', $2::jsonb,
+                                'consolidated_at', now()::text
+                              )
+            WHERE id = $1
+            """,
+            existing["id"],
+            json.dumps(evidence or {}),
+        )
+        logger.info(
+            "CONSOLIDATED [%s] asset=%s rule=%s recurrence=%d",
+            severity, asset_id, rule_family[:40], existing["recurrence_count"] + 1,
+        )
+        return
+
+    # NEW alert
     await pool.execute(
-        """INSERT INTO alerts (tenant_id, site_id, asset_id, severity, description)
-           VALUES ($1, $2, $3, $4, $5)""",
+        """
+        INSERT INTO alerts (
+            tenant_id, site_id, asset_id, severity, description,
+            evidence, first_occurrence_at, last_occurrence_at,
+            shift_key, recurrence_count
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, now(), now(),
+                """ + shift_sql + """, 1)
+        """,
         tenant_id, site_id, asset_id, severity, description,
+        json.dumps(evidence or {}),
     )
     logger.info("ALERT [%s] site=%s asset=%s: %s", severity, site_id, asset_id, description)
 
-
-import time as _t
-_offhrs_seen = {}
-def _offhrs_ok(event):
-    k = (event.get("protocol"), str(event.get("src_ip") or event.get("asset_id") or ""))
-    now = _t.time()
-    if now - _offhrs_seen.get(k, 0) < 900:
-        return False
-    _offhrs_seen[k] = now
-    return True
-
-def is_off_hours(ts: datetime) -> bool:
-    from datetime import timedelta as _td; local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
-    return local_hour < 5 or local_hour >= 23
 
 
 def is_write_command(function_code: str | None) -> bool:
     """Protocol-agnostic check: works for Modbus, DNP3, S7comm write ops,
     since ICSNPP's function_code names for writes always contain WRITE."""
     return bool(function_code) and "WRITE" in function_code.upper()
-
 
 async def has_prior_write(pool: asyncpg.Pool, site_id: UUID, asset_id: UUID) -> bool:
     """True if this asset has ever issued a write command before this event."""
@@ -215,6 +260,8 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             f"Unauthorized write command detected: {event['src_ip']} sent {function_code} "
             f"to {event['dst_ip']} -- this device has only been observed reading until now"
             f"{off_hours_note}.",
+            evidence={"function_code": function_code, "dst_ip": event["dst_ip"],
+                      "src_ip": event["src_ip"], "protocol": event["protocol"]},
         )
 
     if baseline_anomaly:
@@ -223,6 +270,8 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             f"Behavioral anomaly: {event['src_ip']} request timing deviates sharply from its "
             f"own established baseline (gap={gap_seconds:.2f}s, z-score={zscore:.1f}, "
             f"threshold={ZSCORE_THRESHOLD}).",
+            evidence={"gap_seconds": gap_seconds, "zscore": zscore,
+                      "threshold": ZSCORE_THRESHOLD, "protocol": event["protocol"]},
         )
 
 

@@ -19,7 +19,8 @@ async def protocol_activity(site_id: UUID, window_sec: int = 300, _: dict = Depe
     try:
         rows = await pool.fetch("""
             SELECT protocol, src_asset_id, max(time) AS last_seen,
-                   count(*) AS events
+                   count(*) AS events,
+                   count(*) FILTER (WHERE function_code IS NOT NULL) AS completed
             FROM protocol_events
             WHERE site_id = $1 AND time > now() - ($2 || ' seconds')::interval
             GROUP BY protocol, src_asset_id
@@ -31,7 +32,7 @@ async def protocol_activity(site_id: UUID, window_sec: int = 300, _: dict = Depe
             by_proto.setdefault(key, []).append({
                 "asset_id": str(r["src_asset_id"]) if r["src_asset_id"] else None,
                 "last_seen": r["last_seen"].isoformat() if r["last_seen"] else None,
-                "events": r["events"],
+                "events": r["events"], "completed": r["completed"],
             })
         return {"window_sec": window_sec, "by_protocol": by_proto}
     finally:

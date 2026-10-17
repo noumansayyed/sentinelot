@@ -1,261 +1,152 @@
-
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>SentinelOT Compliance Report</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SentinelOT — Compliance Report</title>
 <style>
-body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; color: #1a1a1a; }
-h1 { border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
-h2 { color: #2563eb; margin-top: 32px; }
-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
-th { background: #f0f4ff; }
-.severity-critical { color: #b91c1c; font-weight: bold; }
-.severity-high { color: #c2410c; font-weight: bold; }
-.severity-medium { color: #a16207; }
-.disclaimer { background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 13px; margin-top: 24px; }
-</style></head><body>
-
-<h1>SentinelOT OT Security Monitoring Report</h1>
-<p><strong>Site:</strong> Pune Pilot Plant &nbsp; | &nbsp;
-<strong>Period:</strong> 2026-10-16 to 2026-10-16 &nbsp; | &nbsp;
-<strong>Generated:</strong> 2026-10-16 20:02 UTC</p>
-
-<h2>1. Monitored Asset Inventory</h2>
-<p>9 device(s) passively discovered on the OT network during this period.</p>
-<table>
-<tr><th>IP Address</th><th>Role</th><th>Protocols</th><th>Criticality</th><th>First Seen</th><th>Last Seen</th></tr>
-
-<tr><td>172.28.240.217</td><td>unknown</td><td>modbus_tcp</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.211</td><td>unknown</td><td>modbus_tcp, s7comm, dnp3, opcua</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.221</td><td>unknown</td><td>modbus_tcp</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.214</td><td>unknown</td><td>s7comm</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.212</td><td>unknown</td><td>modbus_tcp</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.218</td><td>unknown</td><td>dnp3</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:01</td></tr>
-
-<tr><td>172.28.240.220</td><td>unknown</td><td>opcua</td>
-<td>unclassified</td><td>2026-10-04 14:00</td><td>2026-10-16 20:01</td></tr>
-
-<tr><td>172.28.240.213</td><td>unknown</td><td>modbus_tcp</td>
-<td>unclassified</td><td>2026-10-16 17:32</td><td>2026-10-16 20:02</td></tr>
-
-<tr><td>172.28.240.3</td><td>unknown</td><td>modbus_tcp</td>
-<td>unclassified</td><td>2026-10-16 19:39</td><td>2026-10-16 19:46</td></tr>
-
-</table>
-
-<h2>2. Security Alerts Summary</h2>
-<p>58 alert(s) recorded during this period.</p>
-<table>
-<tr><th>Time</th><th>Severity</th><th>Description</th><th>Plain-Language Explanation</th><th>Status</th></tr>
-
-<tr><td>2026-10-16 20:02</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T20:02:09+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 20:02</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T20:01:53+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 20:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T20:01:50+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 20:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T20:01:04+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 20:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T20:01:00+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:53</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T19:53:32+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:47</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T19:47:09+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T19:46:41+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T19:46:41+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T19:46:01+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T19:45:59+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:39</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.3 observed outside normal hours at 2026-10-16T19:39:10+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:39</td><td class="severity-medium">MEDIUM</td>
-<td>New device seen on network: 172.28.240.3 (modbus_tcp)</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T19:31:49+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T19:31:32+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T19:31:28+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T19:31:02+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T19:31:01+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T19:30:59+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:16</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T19:16:29+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:16</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T19:16:23+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:16</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T19:16:20+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:16</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T19:16:00+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:15</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T19:15:58+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:15</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T19:15:57+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T19:01:22+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T19:01:15+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T19:01:09+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:01</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T19:01:00+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:00</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T19:00:58+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 19:00</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T19:00:57+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T18:46:09+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T18:46:06+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:46</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T18:45:55+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:45</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T18:45:58+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:45</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T18:45:57+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:45</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T18:45:57+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:31</td><td class="severity-medium">MEDIUM</td>
-<td>Behavioral anomaly: 172.28.240.213 request timing deviates sharply from its own established baseline (gap=1933.00s, z-score=12.6, threshold=4.5).</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T18:31:04+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T18:30:56+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:31</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T18:30:54+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:30</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T18:30:57+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:30</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T18:30:56+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 18:30</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T18:30:56+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:48</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T17:48:09+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:48</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T17:48:08+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:47</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T17:47:51+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:47</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T17:47:35+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:47</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T17:47:33+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:47</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T17:47:33+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-critical">CRITICAL</td>
-<td>Unauthorized write command detected: 172.28.240.213 sent WRITE_SINGLE_REGISTER to 172.28.240.211 -- this device has only been observed reading until now -- and outside normal working hours.</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.213 observed outside normal hours at 2026-10-16T17:32:31+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-medium">MEDIUM</td>
-<td>New device seen on network: 172.28.240.213 (modbus_tcp)</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (s7comm) from 172.28.240.214 observed outside normal hours at 2026-10-16T17:32:05+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (dnp3) from 172.28.240.218 observed outside normal hours at 2026-10-16T17:32:03+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.212 observed outside normal hours at 2026-10-16T17:31:49+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.221 observed outside normal hours at 2026-10-16T17:31:48+00:00</td><td>pending</td><td>open</td></tr>
-
-<tr><td>2026-10-16 17:32</td><td class="severity-high">HIGH</td>
-<td>Industrial protocol activity (modbus_tcp) from 172.28.240.217 observed outside normal hours at 2026-10-16T17:31:48+00:00</td><td>pending</td><td>open</td></tr>
-
-</table>
-
-<h2>3. Severity Breakdown</h2>
-<table>
-<tr><th>Severity</th><th>Count</th></tr>
-
-<tr><td>HIGH</td><td>54</td></tr>
-
-<tr><td>MEDIUM</td><td>3</td></tr>
-
-<tr><td>CRITICAL</td><td>1</td></tr>
-
-</table>
-
-<h2>4. Monitoring Coverage</h2>
-<p>Passive, non-intrusive network monitoring active throughout the reporting period, covering: dnp3, modbus_tcp, opcua, s7comm.
-No active scanning or intrusive probing was performed on any monitored device.</p>
-
-<div class="disclaimer">
-<strong>Scope note:</strong> This report documents OT network monitoring activity and security events
-for internal review and audit-support purposes, referencing categories aligned with CERT-In's
-cybersecurity incident reporting guidelines and DPDPA's breach-notification relevance where applicable.
-It is generated by an automated monitoring system and is intended to support -- not replace --
-a plant's formal compliance and audit processes.
-</div>
-
-</body></html>
+  @page { size: A4; margin: 20mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 32px; background: #ffffff; color: #1c1c1e;
+    font-size: 14px; line-height: 1.6;
+  }
+  .header {
+    border-bottom: 3px solid #0a84ff; padding-bottom: 16px; margin-bottom: 32px;
+  }
+  .header h1 {
+    margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+  }
+  .header .meta { color: #6e6e73; font-size: 12px; margin-top: 8px; }
+  .summary {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+    margin-bottom: 32px;
+  }
+  .summary-box {
+    border: 1px solid #e5e5ea; border-radius: 10px; padding: 16px;
+  }
+  .summary-box .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #6e6e73; font-weight: 600;
+  }
+  .summary-box .value {
+    font-size: 28px; font-weight: 700; margin-top: 8px;
+  }
+  h2 {
+    font-size: 18px; font-weight: 700; margin-top: 36px; margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid #e5e5ea;
+  }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px;
+  }
+  th {
+    background: #f5f5f7; text-align: left; padding: 10px 12px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.3px; color: #3a3a3c; border-bottom: 2px solid #e5e5ea;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f0f2; }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+  }
+  .badge-critical { background: #ffe5e3; color: #c0392b; }
+  .badge-high     { background: #fff3e0; color: #e67e22; }
+  .badge-medium   { background: #fff9c4; color: #b7950b; }
+  .badge-low      { background: #e8f5e9; color: #2e7d32; }
+  .badge-open     { background: #e3f2fd; color: #0a84ff; }
+  .badge-resolved { background: #e8f5e9; color: #2e7d32; }
+  .badge-ack      { background: #fff9c4; color: #b7950b; }
+  .empty { color: #6e6e73; font-style: italic; padding: 20px; text-align: center; }
+  .footer {
+    margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e5ea;
+    font-size: 11px; color: #6e6e73;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>SentinelOT — Compliance Report</h1>
+    <div class="meta">
+      Site: <strong>Chennai Plant</strong> · Generated: 2026-10-17 19:00 UTC<br>
+      Framework: CERT-In Guidelines · DPDPA (Digital Personal Data Protection Act) · 30-day window
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="summary-box">
+      <div class="label">Monitored Assets</div>
+      <div class="value">0</div>
+    </div>
+    <div class="summary-box">
+      <div class="label">Alerts (30d)</div>
+      <div class="value">0</div>
+    </div>
+    <div class="summary-box">
+      <div class="label">Open Alerts</div>
+      <div class="value">0</div>
+    </div>
+    <div class="summary-box">
+      <div class="label">Protocol Events (7d)</div>
+      <div class="value">0</div>
+    </div>
+  </div>
+
+  <h2>1. Monitored Asset Inventory</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>MAC</th>
+        <th>Role</th>
+        <th>Protocols</th>
+        <th>Criticality</th>
+        <th>First Seen</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+<tr><td colspan="7" class="empty">No assets discovered.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Security Alerts (last 30 days)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Severity</th>
+        <th>Status</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+<tr><td colspan="4" class="empty">No alerts in the last 30 days.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Protocol Activity (last 7 days)</h2>
+  <table>
+    <thead>
+      <tr><th>Protocol</th><th>Events</th></tr>
+    </thead>
+    <tbody>
+<tr><td colspan="2" class="empty">No protocol events in the last 7 days.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>
+      <strong>Scope note:</strong> This report documents OT network monitoring activity
+      and security events captured by SentinelOT for the reporting period. It is designed
+      to support a plant's compliance documentation under CERT-In incident-reporting
+      guidelines and DPDPA's breach-notification relevance where applicable.
+    </p>
+    <p>
+      <strong>Methodology:</strong> Passive network monitoring via Zeek and Suricata with
+      ICS protocol parsers. No active scanning or packet injection is performed.
+    </p>
+    <p>Generated by SentinelOT · 2026-10-17 19:00:45 UTC</p>
+  </div>
+</body>
+</html>
