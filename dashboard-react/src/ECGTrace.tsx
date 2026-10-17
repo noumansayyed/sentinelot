@@ -1,56 +1,66 @@
 /**
- * Protocol-specific ECG trace.
- * Modbus = steady high-freq; S7 = bursty; DNP3 = regular heartbeats; OPC = irregular.
+ * Continuous distinct ECG traces per protocol.
+ * Modbus: Heartbeat (fast, steady)
+ * S7comm: Sharp spikes (slow, then sudden)
+ * DNP3: Slow rolling wave
+ * OPC-UA: Square wave (digital)
  */
 interface Props {
-  protocol: string;       // "modbus_tcp" | "s7comm" | "dnp3" | "opcua"
-  events: number;         // events in last 30s
+  protocol: string;
+  events: number;
   color: string;
   active: boolean;
 }
 
-// Different waveform per protocol — like a real ICU monitor
+// Completely different SVG paths for each
 const WAVEFORMS: Record<string, string> = {
-  modbus_tcp: "M0,20 L6,20 L8,18 L10,22 L12,20 L18,20 L20,10 L22,30 L24,20 L30,20 L32,18 L34,22 L36,20 L42,20 L44,10 L46,30 L48,20 L54,20 L56,18 L58,22 L60,20 L66,20 L68,10 L70,30 L72,20 L78,20 L80,18 L82,22 L84,20 L90,20 L92,10 L94,30 L96,20 L100,20",
-  s7comm:     "M0,20 L20,20 L25,5 L30,35 L35,20 L50,20 L55,10 L60,30 L65,20 L80,20 L85,5 L90,35 L95,20 L100,20",
-  dnp3:       "M0,20 L15,20 L18,15 L20,25 L22,20 L35,20 L38,20 L40,5 L42,35 L44,20 L60,20 L63,15 L65,25 L67,20 L80,20 L83,20 L85,5 L87,35 L89,20 L100,20",
-  opcua:      "M0,20 L10,20 L15,12 L20,28 L25,20 L40,20 L45,18 L50,22 L55,20 L70,20 L75,8 L80,32 L85,20 L95,20 L100,20",
+  // Steady heartbeats
+  modbus_tcp: "M0,20 L5,20 L7,18 L9,22 L11,20 L16,20 L18,5 L20,35 L22,20 L28,20 L30,18 L32,22 L34,20 L40,20 L42,5 L44,35 L46,20 L52,20 L54,18 L56,22 L58,20 L64,20 L66,5 L68,35 L70,20 L76,20 L78,18 L80,22 L82,20 L88,20 L90,5 L92,35 L94,20 L100,20",
+  
+  // Flat... SHARP SPIKE... flat... SHARP SPIKE
+  s7comm: "M0,20 L10,20 L10,10 L30,10 L30,30 L50,30 L50,10 L70,10 L70,30 L90,30 L90,20 L100,20",
+  
+  // Slow rolling sine-like wave
+  dnp3: "M0,20 L10,18 L20,25 L30,15 L40,22 L50,10 L60,30 L70,18 L80,25 L90,15 L100,20",
+  
+  // Digital square wave
+  opcua: "M0,20 L10,20 L10,5 L20,5 L20,35 L30,35 L30,5 L40,5 L40,35 L50,35 L50,5 L60,5 L60,35 L70,35 L70,5 L80,5 L80,35 L90,35 L90,5 L100,5"
 };
 
 export default function ECGTrace({ protocol, events, color, active }: Props) {
   const path = WAVEFORMS[protocol] || WAVEFORMS.modbus_tcp;
 
-  // Animation speed scales with event rate
+  // Always animate. If active, go faster.
   const speed = !active ? "idle"
               : events > 100 ? "fast"
               : events > 20  ? "normal"
               : "slow";
 
-  // Gradient id per protocol color
   const gradientId = `ecg-${protocol}-${color.replace("#","")}`;
 
   return (
     <div style={{ position: "relative", width: "100%", height: 36, overflow: "hidden",
-                  maskImage: "linear-gradient(90deg, transparent, black 15%, black 85%, transparent)",
-                  WebkitMaskImage: "linear-gradient(90deg, transparent, black 15%, black 85%, transparent)" }}>
+                  maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
+                  WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)" }}>
       <svg viewBox="0 0 100 40" preserveAspectRatio="none"
            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%"   stopColor={color} stopOpacity="0"/>
-            <stop offset="30%"  stopColor={color} stopOpacity={active ? 0.9 : 0.2}/>
-            <stop offset="70%"  stopColor={color} stopOpacity={active ? 0.9 : 0.2}/>
+            <stop offset="30%"  stopColor={color} stopOpacity={active ? 1.0 : 0.6}/>
+            <stop offset="70%"  stopColor={color} stopOpacity={active ? 1.0 : 0.6}/>
             <stop offset="100%" stopColor={color} stopOpacity="0"/>
           </linearGradient>
         </defs>
         <g className="ecg-track" data-speed={speed}>
+          {/* The waveform repeats twice to allow seamless scrolling */}
           <path d={path} fill="none"
-                stroke={`url(#${gradientId})`}
-                strokeWidth="0.9" vectorEffect="non-scaling-stroke"/>
+                stroke={color}
+                strokeWidth="2" vectorEffect="non-scaling-stroke"/>
           <g transform="translate(100,0)">
             <path d={path} fill="none"
-                  stroke={`url(#${gradientId})`}
-                  strokeWidth="0.9" vectorEffect="non-scaling-stroke"/>
+                  stroke={color}
+                  strokeWidth="2" vectorEffect="non-scaling-stroke"/>
           </g>
         </g>
       </svg>

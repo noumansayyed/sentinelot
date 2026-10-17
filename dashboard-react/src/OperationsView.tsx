@@ -236,19 +236,19 @@ export default function OperationsView({ card }: Props) {
                         style={{ background: active ? color : (idle ? "var(--warning)" : "var(--text-4)"),
                                  color }}/>
                   <span className="t-h3" style={{ color:"var(--text-1)" }}>{PROTO_NAMES[p]}</span>
-                  {active && <span style={{ marginLeft:6, fontSize:10, fontWeight:700, color:"var(--success)" }}>LIVE</span>}
-                  {idle && <span style={{ marginLeft:6, fontSize:10, fontWeight:700, color:"var(--warning)" }}>IDLE</span>}
+                  {active && <span style={{ marginLeft:6, fontSize:10, fontWeight:600, color:"var(--text-3)" }}>MONITORING</span>}
+                  {idle && <span style={{ marginLeft:6, fontSize:10, fontWeight:600, color:"var(--text-3)" }}>IDLE</span>}
                 </div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                   <span className="t-mono"
                         style={{ fontSize:32, fontWeight:700, color, letterSpacing:"-1px" }}>
-                    <NumberRoll value={f?.completed_5min || 0}/>
+                    <NumberRoll value={f?.devices_seen || 0}/>
                   </span>
-                  <span className="t-meta">events / 5min</span>
+                  <span className="t-meta">devices active</span>
                 </div>
                 <ECGTrace protocol={p} events={f?.completed_5min || 0} color={color} active={!!active}/>
                 <div className="t-meta" style={{ marginTop:6 }}>
-                  {offline ? "no events in 5 min" : `${f?.devices_seen} dev · last ${ago(f?.seconds_since_event ?? null)} ago`}
+                  {offline ? "no traffic in 5 min" : "Passive sensor active"}
                 </div>
               </div>
             );
@@ -288,7 +288,7 @@ export default function OperationsView({ card }: Props) {
                             borderTop:"1px solid var(--hairline-light)",
                             display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
                 <span className="t-meta">{isCollapsed?"▶":"▼"}</span>
-                <span className="status-dot" style={{ background: color, color }}/>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }}/>
                 <span className="t-h3">{ROLE_LABEL[role]}</span>
                 <span className="t-meta">({rows.length})</span>
                 {role === "unknown" && (
@@ -314,10 +314,16 @@ export default function OperationsView({ card }: Props) {
                                  onChange={(e)=>{ e.stopPropagation(); toggleSelect(d.asset_id); }}
                                  style={{ cursor:"pointer", width:18, height:18, accentColor:"var(--accent)" }}/>
                         </td>
-                        <td style={{ padding:"14px 8px", width:70 }}>
-                          <span className="status-dot"
-                                data-live={d.status==="active" ? "true" : "false"}
-                                style={{ background: statusColor(d.status), color: statusColor(d.status) }}/>
+                        <td style={{ padding:"14px 8px", width:80 }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: "0.5px",
+                            color: d.status === "active" ? "var(--success)" : d.status === "idle" ? "var(--warning)" : "var(--text-3)",
+                            background: d.status === "active" ? "rgba(48,209,88,0.1)" : d.status === "idle" ? "rgba(255,159,10,0.1)" : "transparent",
+                            padding: "3px 8px", borderRadius: 4,
+                            border: d.status === "active" ? "1px solid rgba(48,209,88,0.3)" : d.status === "idle" ? "1px solid rgba(255,159,10,0.3)" : "1px solid transparent"
+                          }}>
+                            {d.status.toUpperCase()}
+                          </span>
                         </td>
                         <td className="t-mono" style={{ padding:"14px 8px", color:"var(--text-1)", fontSize:14, fontWeight:500 }}>
                           {d.ip.replace("/32","")}

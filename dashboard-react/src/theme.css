@@ -168,7 +168,7 @@ html, body, #root {
 }
 .ecg-track[data-speed="fast"]   { animation-duration: 3s; }
 .ecg-track[data-speed="slow"]   { animation-duration: 12s; }
-.ecg-track[data-speed="idle"]   { animation-play-state: paused; opacity: 0.3; }
+.ecg-track[data-speed="idle"]   { animation-duration: 15s; opacity: 0.4; }
 
 /* ---------- number roll ---------- */
 @keyframes num-pop {
@@ -227,3 +227,39 @@ html, body, #root {
   border: 3px solid transparent; background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--hairline-strong); background-clip: content-box; }
+
+/* ================================================================
+   PRINT STYLES (for Save as PDF / Print)
+   ================================================================ */
+@media print {
+  /* Hide the navigation shell */
+  body > #root > div > div:nth-child(1),  /* Top bar */
+  body > #root > div > div:nth-child(2) { /* Tab bar */
+    display: none !important;
+  }
+
+  /* Reset the background and padding for paper */
+  body, html, #root {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide the app background gradient */
+  .app-bg { display: none !important; }
+
+  /* Force the print header and "Print" button to hide */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show the report container cleanly */
+  .print-target {
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+}

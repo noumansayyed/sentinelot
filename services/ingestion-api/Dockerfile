@@ -12,6 +12,8 @@ COPY playbook.py .
 COPY classify_devices.py .
 COPY alert_actions.py .
 COPY tenant.py .
+COPY reports.py .
+COPY report_api.py .
 COPY site_admin.py .
 COPY asset_admin.py .
 

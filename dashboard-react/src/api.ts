@@ -320,3 +320,34 @@ export async function fetchPlaybook(alertId: string, refresh = false): Promise<P
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
+
+// ---------- Reports ----------
+export interface ReportMeta {
+  id: string;
+  created_at: string;
+  triggered_by: string;
+  file_path: string;
+}
+export async function generateReport(siteId: string = SITE_ID): Promise<void> {
+  const res = await authed(`${API_BASE}/v1/sites/${siteId}/reports/generate`, { method: "POST" });
+  if (!res.ok) throw new Error(await res.text());
+}
+export async function listReports(siteId: string = SITE_ID): Promise<ReportMeta[]> {
+  const res = await authed(`${API_BASE}/v1/sites/${siteId}/reports`);
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).reports || [];
+}
+
+// ---------- Native Report ----------
+export interface ReportData {
+  site_name: string;
+  generated_at: string;
+  assets: any[];
+  alerts: any[];
+  events: any[];
+}
+export async function fetchReportData(siteId: string = SITE_ID): Promise<ReportData> {
+  const res = await authed(`${API_BASE}/v1/sites/${siteId}/report-data`);
+  if (!res.ok) throw new Error(`report HTTP ${res.status}`);
+  return await res.json();
+}

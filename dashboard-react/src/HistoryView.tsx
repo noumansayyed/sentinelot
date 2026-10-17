@@ -82,47 +82,65 @@ export default function HistoryView({ card }: { card: React.CSSProperties }) {
         <div className="t-h3" style={{ marginBottom: 16 }}>
           Full Alert History ({alerts.length} records)
         </div>
-        <div style={{ maxHeight: 420, overflowY: "auto" }}>
-          {alerts.map((a, i) => {
-            const dev = REGISTRY[a.description.match(/\b(172\.\d+\.\d+\.\d+)\b/)?.[1] || ""];
-            const known = isKnown(a.description.match(/\b(172\.\d+\.\d+\.\d+)\b/)?.[1] || "");
-            return (
-              <div key={a.id}
-                   style={{ display: "flex", gap: 14, padding: "12px 0",
-                            borderTop: i === 0 ? "none" : "1px solid var(--hairline-soft)",
-                            alignItems: "flex-start" }}>
-                <span className="t-meta" style={{ width: 32, flexShrink: 0 }}>{i + 1}</span>
-                <span className="t-mono" style={{ color: "var(--text-3)", width: 170, flexShrink: 0, fontSize: 13 }}>
-                  {new Date(a.time).toLocaleString()}
-                </span>
-                <span style={{ width: 70, flexShrink: 0,
-                                fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-                                color: a.severity === "critical" ? "var(--danger)"
-                                     : a.severity === "high" ? "var(--warning)"
-                                     : "var(--text-3)" }}>
-                  {a.severity}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: "var(--text-1)", fontSize: 14 }}>{a.description}</div>
-                  {dev && HAS_REG && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-3)" }}>
-                      {dev.role}
-                      {known ? (
-                        <span style={{ color: "var(--success)", marginLeft: 8, fontWeight: 600 }}>KNOWN</span>
-                      ) : (
-                        <span style={{ color: "var(--danger)", marginLeft: 8, fontWeight: 600 }}>UNKNOWN</span>
-                      )}
-                    </div>
-                  )}
+        <div style={{ maxHeight: 600, overflowY: "auto" }}>
+          {(() => {
+            const grouped: Record<string, Alert[]> = {};
+            alerts.forEach(a => {
+              const d = new Date(a.time).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+              if (!grouped[d]) grouped[d] = [];
+              grouped[d].push(a);
+            });
+
+            if (alerts.length === 0) {
+              return <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>No alert history yet.</div>;
+            }
+
+            let globalIdx = 0;
+            return Object.keys(grouped).map(date => (
+              <div key={date}>
+                <div style={{ background: "var(--bg-0)", padding: "10px 0",
+                              fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "1px",
+                              borderTop: "1px solid var(--hairline-light)", borderBottom: "1px solid var(--hairline-light)" }}>
+                  {date.toUpperCase()}
                 </div>
+                {grouped[date].map((a) => {
+                  globalIdx++;
+                  const dev = REGISTRY[a.description.match(/\b(172\.\d+\.\d+\.\d+)\b/)?.[1] || ""];
+                  const known = isKnown(a.description.match(/\b(172\.\d+\.\d+\.\d+)\b/)?.[1] || "");
+                  return (
+                    <div key={a.id} style={{ display: "flex", gap: 14, padding: "12px 0",
+                                          borderTop: "1px solid var(--hairline-soft)",
+                                          alignItems: "flex-start" }}>
+                      <span className="t-meta" style={{ width: 32, flexShrink: 0 }}>{globalIdx}</span>
+                      <span className="t-mono" style={{ color: "var(--text-3)", width: 170, flexShrink: 0, fontSize: 13 }}>
+                        {new Date(a.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span style={{ width: 70, flexShrink: 0,
+                                      fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+                                      color: a.severity === "critical" ? "var(--danger)"
+                                           : a.severity === "high" ? "var(--warning)"
+                                           : "var(--text-3)" }}>
+                        {a.severity}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: "var(--text-1)", fontSize: 14 }}>{a.description}</div>
+                        {dev && HAS_REG && (
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-3)" }}>
+                            {dev.role}
+                            {known ? (
+                              <span style={{ color: "var(--success)", marginLeft: 8, fontWeight: 600 }}>KNOWN</span>
+                            ) : (
+                              <span style={{ color: "var(--danger)", marginLeft: 8, fontWeight: 600 }}>UNKNOWN</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-          {alerts.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>
-              No alert history yet.
-            </div>
-          )}
+            ));
+          })()}
         </div>
       </div>
     </div>

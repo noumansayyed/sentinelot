@@ -5,23 +5,24 @@ import OperationsView from "./OperationsView";
 import AlertsView from "./AlertsView";
 import HistoryView from "./HistoryView";
 import AuditView from "./AuditView";
+import ReportsView from "./ReportsView";
 import ThemeToggle, { useTheme } from "./ThemeToggle";
 import { fetchOperations, SITE_ID } from "./api";
 
 type Tab = "operations" | "alerts" | "history" | "compliance" | "audit";
 
-const card: React.CSSProperties = {};   // legacy — operations uses .glass now
+const card: React.CSSProperties = {};
 
 const TAB_LABELS: Record<Tab, string> = {
   operations: "Operations",
   alerts:     "Alerts",
   history:    "History",
-  compliance: "Compliance",
+  compliance: "Reports",
   audit:      "Audit Log",
 };
 
 export default function App() {
-  useTheme();  // sets data-theme on <html>
+  useTheme();
   const [tab, setTab]           = useState<Tab>("operations");
   const [siteName, setSite]     = useState("…");
   const [alertBadge, setBadge]  = useState<number>(0);
@@ -47,7 +48,7 @@ export default function App() {
                   fontFamily: "var(--font-sans)", position: "relative" }}>
       <div className="app-bg" />
 
-      {/* ---- top bar ---- */}
+      {/* top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "16px 28px", borderBottom: "1px solid var(--border-soft)",
                     background: "var(--surface-1)", backdropFilter: "blur(40px)",
@@ -57,7 +58,7 @@ export default function App() {
             <div style={{ width: 28, height: 28, borderRadius: 8,
                           background: "linear-gradient(135deg, var(--accent), var(--violet))",
                           display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 14, fontWeight: 800, color: "var(--text-1)" }}>S</div>
+                          fontSize: 14, fontWeight: 800, color: "#fff" }}>S</div>
             <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.4px" }}>SentinelOT</span>
           </div>
           <div style={{ width: 1, height: 20, background: "var(--border-light)" }} />
@@ -83,7 +84,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ---- tabs ---- */}
+      {/* tabs */}
       <div style={{ display: "flex", gap: 4, padding: "0 24px",
                     borderBottom: "1px solid var(--border-soft)",
                     background: "var(--surface-1)", backdropFilter: "blur(40px)",
@@ -98,33 +99,21 @@ export default function App() {
             {TAB_LABELS[t]}
             {t === "alerts" && alertBadge > 0 && (
               <span style={{ display: "inline-block", marginLeft: 8, padding: "1px 7px",
-                             borderRadius: 999, background: "var(--danger)", color: "var(--text-1)",
+                             borderRadius: 999, background: "var(--danger)", color: "#fff",
                              fontSize: 10, fontWeight: 700 }}>{alertBadge}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* ---- view ---- */}
+      {/* view */}
       <div key={tab} className="tab-view"
            style={{ padding: 28, maxWidth: 1600, margin: "0 auto" }}>
         {tab === "operations" && <OperationsView card={card} />}
         {tab === "alerts"     && <AlertsView     card={card} />}
         {tab === "history"    && <HistoryView    card={card} />}
         {tab === "audit"      && <AuditView      card={card} />}
-        {tab === "compliance" && (
-          <div className="glass float-in" style={{ padding: 0, overflow: "hidden", minHeight: "80vh" }}>
-            <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--border-light)",
-                          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700 }}>CERT-In / DPDPA-aligned Compliance Report</span>
-              <a href="/reports/compliance_report.html" target="_blank" rel="noreferrer"
-                 style={{ color: "var(--accent)", fontSize: 12 }}>Open in new tab ↗</a>
-            </div>
-            <iframe src="/reports/compliance_report.html"
-              style={{ width: "100%", height: "calc(100vh - 180px)", border: "none", background: "var(--text-1)" }}
-              title="Compliance Report" />
-          </div>
-        )}
+        {tab === "compliance" && <ReportsView    card={card} />}
       </div>
     </div>
   );

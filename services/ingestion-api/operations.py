@@ -43,7 +43,7 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
             FROM protocol_events
             WHERE site_id = $1
               AND function_code IS NOT NULL
-              AND time > now() - interval '60 seconds'
+              AND time > now() - interval '30 seconds'
             GROUP BY src_asset_id
         """, site_id)
         completed_map = {str(r["asset_id"]): (r["n"], r["last_completed"]) for r in completions if r["asset_id"]}
@@ -87,7 +87,7 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
                    max(time) AS last_event,
                    count(*) FILTER (WHERE function_code IS NOT NULL) AS completed
             FROM protocol_events
-            WHERE site_id = $1 AND time > now() - interval '5 minutes'
+            WHERE site_id = $1 AND time > now() - interval '30 seconds'
             GROUP BY protocol
             """, site_id,
         )

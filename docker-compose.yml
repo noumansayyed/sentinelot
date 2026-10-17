@@ -66,6 +66,8 @@ services:
       - "9001:9001"
 
   ingestion-api:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     build:
       context: ./services/ingestion-api
     restart: unless-stopped
