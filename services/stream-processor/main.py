@@ -13,6 +13,23 @@ import logging
 import math
 import os
 from datetime import datetime, timezone
+
+import time as _t
+_offhrs_seen: dict = {}
+
+def _offhrs_ok(event: dict) -> bool:
+    k = (event.get("protocol"), str(event.get("src_ip") or event.get("asset_id") or ""))
+    now = _t.time()
+    if now - _offhrs_seen.get(k, 0) < 900:
+        return False
+    _offhrs_seen[k] = now
+    return True
+
+def is_off_hours(ts: datetime) -> bool:
+    from datetime import timedelta as _td
+    local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
+    return local_hour < 6 or local_hour >= 22
+
 from uuid import UUID, uuid4
 
 import asyncpg
