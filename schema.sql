@@ -106,6 +106,17 @@ CREATE TABLE alerts (
     status          TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved', 'false_positive')),
     evidence        JSONB,
     llm_explanation TEXT,
+    acknowledged_by     TEXT,
+    acknowledged_at     TIMESTAMPTZ,
+    escalated_at        TIMESTAMPTZ,
+    escalated_by        TEXT,
+    escalation_ref      TEXT,
+    archived_at         TIMESTAMPTZ,
+    archived_reason     TEXT,
+    recurrence_count    INTEGER NOT NULL DEFAULT 1,
+    first_occurrence_at TIMESTAMPTZ,
+    last_occurrence_at  TIMESTAMPTZ,
+    shift_key           TEXT,
     PRIMARY KEY (id, time)
 );
 
@@ -136,10 +147,14 @@ CREATE TABLE audit_log (
     id          BIGSERIAL PRIMARY KEY,
     time        TIMESTAMPTZ NOT NULL DEFAULT now(),
     tenant_id   UUID NOT NULL,
+    site_id     UUID,
     user_id     UUID,
+    actor       TEXT,
     action      TEXT NOT NULL,
+    target      TEXT,
     target_type TEXT,
     target_id   UUID,
+    detail      TEXT,
     details     JSONB
 );
 
@@ -150,3 +165,70 @@ ALTER TABLE compliance_reports ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_isolation_alerts ON alerts
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- Enrollment tokens for new site sensor setup
+CREATE TABLE IF NOT EXISTS enrollment_tokens (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      UUID NOT NULL REFERENCES tenants(id),
+    site_id        UUID NOT NULL REFERENCES sites(id),
+    token_hash     text NOT NULL UNIQUE,
+    label          text,
+    created_by     text NOT NULL,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    expires_at     timestamptz NOT NULL,
+    used_at        timestamptz,
+    used_by_sensor uuid REFERENCES sensors(id),
+    revoked_at     timestamptz,
+    revoked_by     text
+);
+CREATE INDEX IF NOT EXISTS idx_enroll_site ON enrollment_tokens(site_id, created_at DESC);
+
+-- LLM playbook cache
+CREATE TABLE IF NOT EXISTS alert_playbooks (
+    alert_id     uuid PRIMARY KEY,
+    alert_time   timestamptz NOT NULL,
+    what         text NOT NULL,
+    why          text NOT NULL,
+    actions      jsonb NOT NULL,
+    escalate     text,
+    model        text NOT NULL,
+    generated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Classification audit trail
+CREATE TABLE IF NOT EXISTS asset_classifications (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id     uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    site_id      uuid NOT NULL REFERENCES sites(id),
+    actor        text NOT NULL,
+    action       text NOT NULL,
+    old_role     text,
+    new_role     text,
+    old_hidden   boolean,
+    new_hidden   boolean,
+    reason       text,
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Alert status transition log
+CREATE TABLE IF NOT EXISTS alerts_status_log (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    alert_id        uuid NOT NULL,
+    alert_time      timestamptz NOT NULL,
+    from_status     text,
+    to_status       text NOT NULL,
+    actor           text NOT NULL,
+    reason          text,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_status_log_alert ON alerts_status_log(alert_id, alert_time);
+
+-- Generated compliance reports
+CREATE TABLE IF NOT EXISTS report_archive (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    site_id      uuid NOT NULL REFERENCES sites(id),
+    site_name    text NOT NULL,
+    file_path    text NOT NULL,
+    triggered_by text NOT NULL,
+    created_at   timestamptz NOT NULL DEFAULT now()
+);
