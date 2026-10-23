@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { getToken } from "./api";
+import { getToken, isKnown } from "./api";
 import {
   fetchOperations, Operations, OpDevice,
   fetchAssetInbox, classifyAsset, bulkClassify, InboxAsset, SITE_ID,
@@ -178,13 +178,13 @@ export default function OperationsView({ card }: Props) {
   }
   async function handleDelete(d: OpDevice) {
     // Check if the device is classified (known or has a role)
-    const isKnown = isKnown(d.ip);
+    const known = isKnown(d.ip);
     const hasRole = d.role !== "unknown";
     
     let warning = `Permanently delete ${d.ip}?\n\nThis will remove all history.`;
     
-    if (isKnown || hasRole) {
-      warning += `\n\n⚠ WARNING: This device is currently ${isKnown ? "APPROVED AS KNOWN" : ""}${isKnown && hasRole ? " and " : ""}${hasRole ? `assigned the role "${d.role.toUpperCase()}"` : ""}.`;
+    if (known || hasRole) {
+      warning += `\n\n⚠ WARNING: This device is currently ${known ? "APPROVED AS KNOWN" : ""}${known && hasRole ? " and " : ""}${hasRole ? `assigned the role "${d.role.toUpperCase()}"` : ""}.`;
       warning += `\n\nIf you delete it, it will lose its classification and reappear as an UNCLASSIFIED device with a "New Device" alert the next time it talks.`;
       warning += `\n\nAre you sure you want to proceed?`;
     } else {
