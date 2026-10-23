@@ -89,7 +89,7 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
                    max(time) AS last_event,
                    count(*) FILTER (WHERE function_code IS NOT NULL) AS completed
             FROM protocol_events
-            WHERE site_id = $1 AND time > now() - interval '30 seconds'
+            WHERE site_id = $1 AND time > now() - interval '5 minutes'
             GROUP BY protocol
             """, site_id,
         )
