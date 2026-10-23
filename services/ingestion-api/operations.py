@@ -7,9 +7,12 @@ import asyncpg, os
 router = APIRouter()
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-ACTIVE_THRESHOLD_SEC = 60      # seen in last 60s = active
-IDLE_THRESHOLD_SEC   = 300     # seen in 1–5 min = idle
-# beyond 300s = offline
+RECENT_WINDOW_SEC = 10   # single source of truth: any device/protocol event within this window is "not offline"
+
+# A device is:
+#   ACTIVE  — has a successful exchange (READ_*, WRITE_*, CONNECT_SUCCESS) in RECENT_WINDOW
+#   IDLE    — has any event (incl. CONNECT_FAILED) in RECENT_WINDOW, but no successful exchange
+#   OFFLINE — has no events at all in RECENT_WINDOW
 
 
 @router.get("/v1/sites/{site_id}/operations")
@@ -37,34 +40,65 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
 
         now = datetime.now(timezone.utc)
 
-        # Real completions per asset (last 60s) — for honest "active" status
-        completions = await pool.fetch("""
-            SELECT asset_id, count(*) AS n, max(time) AS last_completed
+        # Successful exchanges per asset in RECENT_WINDOW (both src AND dst — a responder is also "active")
+        successful_rows = await pool.fetch("""
+            SELECT asset_id, count(*) AS n
             FROM (
-                SELECT src_asset_id AS asset_id, time FROM protocol_events
-                WHERE site_id = $1 AND function_code IS NOT NULL AND time > now() - interval '30 seconds'
+                SELECT src_asset_id AS asset_id FROM protocol_events
+                WHERE site_id = $1
+                  AND function_code IN ('READ_HOLDING_REGISTERS','WRITE_SINGLE_REGISTER',
+                                        'READ_COILS','WRITE_COIL','READ_INPUT_REGISTERS',
+                                        'READ_DISCRETE_INPUTS','WRITE_MULTIPLE_REGISTERS',
+                                        'WRITE_MULTIPLE_COILS','CONNECT_SUCCESS')
+                  AND time > now() - ($2 * interval '1 second')
                 UNION ALL
-                SELECT dst_asset_id AS asset_id, time FROM protocol_events
-                WHERE site_id = $1 AND function_code IS NOT NULL AND time > now() - interval '30 seconds'
+                SELECT dst_asset_id AS asset_id FROM protocol_events
+                WHERE site_id = $1
+                  AND function_code IN ('READ_HOLDING_REGISTERS','WRITE_SINGLE_REGISTER',
+                                        'READ_COILS','WRITE_COIL','READ_INPUT_REGISTERS',
+                                        'READ_DISCRETE_INPUTS','WRITE_MULTIPLE_REGISTERS',
+                                        'WRITE_MULTIPLE_COILS','CONNECT_SUCCESS')
+                  AND time > now() - ($2 * interval '1 second')
             ) sub WHERE asset_id IS NOT NULL GROUP BY asset_id
+        """, site_id, RECENT_WINDOW_SEC)
+        success_map = {str(r["asset_id"]): r["n"] for r in successful_rows if r["asset_id"]}
+
+        # ANY event per asset (success or failure) in RECENT_WINDOW
+        any_event_rows = await pool.fetch("""
+            SELECT src_asset_id AS asset_id, count(*) AS n, max(time) AS last_any
+            FROM protocol_events
+            WHERE site_id = $1 AND time > now() - ($2 * interval '1 second')
+              AND src_asset_id IS NOT NULL
+            GROUP BY src_asset_id
+        """, site_id, RECENT_WINDOW_SEC)
+        event_map = {str(r["asset_id"]): (r["n"], r["last_any"]) for r in any_event_rows if r["asset_id"]}
+
+        # Absolute last src event (for seconds_since_seen)
+        last_src_rows = await pool.fetch("""
+            SELECT src_asset_id AS asset_id, max(time) AS last_src
+            FROM protocol_events
+            WHERE site_id = $1 AND src_asset_id IS NOT NULL
+            GROUP BY src_asset_id
         """, site_id)
-        completed_map = {str(r["asset_id"]): (r["n"], r["last_completed"]) for r in completions if r["asset_id"]}
+        last_src_map = {str(r["asset_id"]): r["last_src"] for r in last_src_rows if r["asset_id"]}
 
         devices = []
         for r in asset_rows:
-            last_seen = r["last_seen"]
-            age = (now - last_seen).total_seconds() if last_seen else None
-            comp = completed_map.get(str(r["id"]))
-            if comp and comp[0] > 0:
-                status = "active"          # completed a real transaction in last 60s
-            elif age is None:
-                status = "offline"
-            elif age < ACTIVE_THRESHOLD_SEC:
-                status = "idle"            # saw traffic but no completion
-            elif age < IDLE_THRESHOLD_SEC:
+            asset_id_str = str(r["id"])
+            success_n = success_map.get(asset_id_str, 0)
+            any_n, last_any = event_map.get(asset_id_str, (0, None))
+            last_src = last_src_map.get(asset_id_str, None)
+
+            if success_n > 0:
+                status = "active"
+            elif any_n > 0:
                 status = "idle"
             else:
                 status = "offline"
+
+            # Use absolute last src event for the "seconds ago" counter
+            last_seen = last_src or r["last_seen"]
+            age = (now - last_seen).total_seconds() if last_seen else None
 
             devices.append({
                 "asset_id": str(r["id"]),
@@ -80,33 +114,63 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
                 "seconds_since_seen": int(age) if age is not None else None,
             })
 
-        # Protocol health: real events in last 5 min, per protocol
+        # Protocol health: same 3-state logic, aggregated per protocol
         proto_rows = await pool.fetch(
             """
             SELECT protocol,
                    count(*) AS events,
                    count(DISTINCT src_asset_id) AS devices,
                    max(time) AS last_event,
-                   count(*) FILTER (WHERE function_code IS NOT NULL) AS completed
+                   count(*) FILTER (WHERE function_code IN ('READ_HOLDING_REGISTERS','WRITE_SINGLE_REGISTER',
+                                                             'READ_COILS','WRITE_COIL','READ_INPUT_REGISTERS',
+                                                             'READ_DISCRETE_INPUTS','WRITE_MULTIPLE_REGISTERS',
+                                                             'WRITE_MULTIPLE_COILS','CONNECT_SUCCESS')) AS successful,
+                   count(DISTINCT src_asset_id) FILTER (WHERE function_code IN ('READ_HOLDING_REGISTERS','WRITE_SINGLE_REGISTER',
+                                                             'READ_COILS','WRITE_COIL','READ_INPUT_REGISTERS',
+                                                             'READ_DISCRETE_INPUTS','WRITE_MULTIPLE_REGISTERS',
+                                                             'WRITE_MULTIPLE_COILS','CONNECT_SUCCESS')) AS successful_devices
             FROM protocol_events
-            WHERE site_id = $1 AND time > now() - interval '5 minutes'
+            WHERE site_id = $1 AND time > now() - ($2 * interval '1 second')
             GROUP BY protocol
-            """, site_id,
+            """, site_id, RECENT_WINDOW_SEC,
         )
 
         protocols = []
         for p in proto_rows:
             last = p["last_event"]
             age = (now - last).total_seconds() if last else None
+            if p["successful"] > 0:
+                proto_status = "active"
+            elif p["events"] > 0:
+                proto_status = "idle"
+            else:
+                proto_status = "offline"
             protocols.append({
                 "protocol": p["protocol"],
                 "events_5min": p["events"],
-                "completed_5min": p["completed"],
+                "completed_5min": p["successful"],
                 "devices_seen": p["devices"],
+                "successful_devices": p["successful_devices"],
                 "last_event": last.isoformat() if last else None,
                 "seconds_since_event": int(age) if age is not None else None,
-                "status": "active" if age is not None and age < 60 else ("idle" if age is not None and age < 300 else "offline"),
+                "status": proto_status,
             })
+
+        # Ensure all 4 known protocols are present, even if no events
+        KNOWN_PROTOCOLS = ["modbus_tcp", "s7comm", "dnp3", "opcua"]
+        present = {p["protocol"] for p in protocols}
+        for kp in KNOWN_PROTOCOLS:
+            if kp not in present:
+                protocols.append({
+                    "protocol": kp,
+                    "events_5min": 0,
+                    "completed_5min": 0,
+                    "devices_seen": 0,
+                    "successful_devices": 0,
+                    "last_event": None,
+                    "seconds_since_event": None,
+                    "status": "offline",
+                })
 
         # Alert summary — count only, no detail (Operations tab doesn't show alerts)
         alert_counts = await pool.fetchrow(

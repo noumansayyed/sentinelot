@@ -316,13 +316,13 @@ export default function OperationsView({ card }: Props) {
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                   <span className="t-mono"
                         style={{ fontSize:32, fontWeight:700, color, letterSpacing:"-1px" }}>
-                    <NumberRoll value={f?.devices_seen || 0}/>
+                    <NumberRoll value={f?.successful_devices || 0}/>
                   </span>
                   <span className="t-meta">devices active</span>
                 </div>
                 <ECGTrace protocol={p} events={f?.completed_5min || 0} color={color} active={!!active}/>
                 <div className="t-meta" style={{ marginTop:6 }}>
-                  {!f || (f.events_5min || 0) === 0 ? "no traffic in 5 min" : "Passive sensor active"}
+                  {!f || f.status === "offline" ? "not seen in 10s" : (f.status === "idle" ? "seen — no successful traffic" : "Passive sensor active")}
                 </div>
               </div>
             );
@@ -402,7 +402,6 @@ export default function OperationsView({ card }: Props) {
       <div className="float-in-4 glass" style={{ padding:0, overflow:"hidden" }}>
         {ROLE_ORDER.map(role => {
           const rows = grouped[role];
-          if (rows.length === 0) return null;
           const isCollapsed = collapsed.has(role);
           const color = ROLE_COLOR[role];
           return (
@@ -424,6 +423,13 @@ export default function OperationsView({ card }: Props) {
               {!isCollapsed && (
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
                   <tbody>
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: "16px 24px", color: "var(--text-3)", fontSize: 13, fontStyle: "italic" }}>
+                          No devices active
+                        </td>
+                      </tr>
+                    )}
                     {rows.map(d => (
                       <tr key={d.asset_id}
                           onClick={(e)=>handleRowClick(e,d,orderedIds)}

@@ -33,6 +33,7 @@ export default function App() {
   const [editSiteName, setEditSiteName] = useState("");
   const [selectedSite, setSelectedSite] = useState(SITE_ID);
   const [alertBadge, setBadge]  = useState<number>(0);
+  const [health, setHealth] = useState<any>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -49,6 +50,18 @@ export default function App() {
     tick();
     const id = setInterval(tick, 5000);
     return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  useEffect(() => {
+    const poll = () => {
+      fetch("http://localhost:8000/healthz")
+        .then(r => r.json())
+        .then(d => setHealth(d))
+        .catch(() => setHealth(null));
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -82,21 +95,30 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 20, alignItems: "center", fontSize: 11, color: "var(--text-3)" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%",
-                                                  background: "var(--success)", color: "var(--success)" }} />
-            Zeek
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%",
-                                                  background: "var(--success)", color: "var(--success)" }} />
-            Kafka
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%",
-                                                  background: "var(--success)", color: "var(--success)" }} />
-            LLM
-          </span>
+          {[
+            { key: "zeek",        label: "Zeek"        },
+            { key: "kafka",       label: "Kafka"       },
+            { key: "zeek_bridge", label: "zeek-bridge" },
+            { key: "conn_bridge", label: "conn-bridge" },
+            { key: "llm",         label: "LLM"         },
+          ].map(({ key, label }) => {
+            const s = health?.[key as keyof typeof health];
+            const state = (s as any)?.state || "offline";
+            const color =
+              state === "active"  ? "var(--success)" :
+              state === "idle"    ? "var(--warning)" :
+                                    "var(--danger)";
+            return (
+              <span key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  className="status-dot"
+                  data-live={state === "active" ? "true" : "false"}
+                  style={{ background: color, color }}
+                />
+                {label}
+              </span>
+            );
+          })}
           <ThemeToggle />
         </div>
       </div>

@@ -1,24 +1,42 @@
-import time, requests
+import time, requests, os
 LOG="/logs/zeek/conn.log"
 URL="http://sentinelot-ingestion-api-1:8000/v1/ingest/events"
-SENSOR="33333333-3333-3333-3333-333333333333"; import os
+SENSOR="33333333-3333-3333-3333-333333333333"
 SITE=os.environ.get("SITE_ID", "22222222-2222-2222-2222-222222222222")
 FP="dev-test-fingerprint-000"
-PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua"}
-last={}
+PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua","502":"modbus_tcp"}
 f=open(LOG); f.seek(0,2); print("tailing",LOG,flush=True)
+
 while True:
-    line=f.readline()
-    if not line: time.sleep(1); continue
+    line = f.readline()
+    if not line:
+        time.sleep(1)
+        continue
     if line.startswith("#"): continue
-    c=line.rstrip("\n").split("\t")
-    if len(c)<6 or c[5] not in PORTS: continue
-    proto=PORTS[c[5]]; key=(c[2],c[4],c[5]); now=time.time()
-    if now-last.get(key,0)<60: continue
-    last[key]=now
-    ev={"timestamp":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime(float(c[0]))),"zeek_uid":c[1],
-        "protocol":proto,"src_ip":c[2],"dst_ip":c[4],"function_code":"CONNECT",
-        "payload_summary":{"source":"zeek conn.log","level":"connection-only"}}
-    r=requests.post(URL,headers={"X-Client-Cert-Fingerprint":FP},
-        json={"sensor_id":SENSOR,"site_id":SITE,"events":[ev]},timeout=5)
-    print(proto,c[2],"->",c[4],r.status_code,r.text[:120],flush=True)
+    c = line.rstrip("\n").split("\t")
+    if len(c) < 12 or c[5] not in PORTS: continue
+    
+    proto = PORTS[c[5]]
+    conn_state = c[11]
+    function_code = "CONNECT_SUCCESS" if conn_state == "SF" else "CONNECT_FAILED"
+    orig_bytes = int(c[9]) if c[9].isdigit() else 0
+    resp_bytes = int(c[10]) if c[10].isdigit() else 0
+    
+    ev = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(c[0]))),
+        "zeek_uid": c[1],
+        "protocol": proto,
+        "src_ip": c[2],
+        "dst_ip": c[4],
+        "function_code": function_code,
+        "payload_summary": {"source": "zeek conn.log", "level": "connection-only",
+                            "conn_state": conn_state,
+                            "orig_bytes": orig_bytes,
+                            "resp_bytes": resp_bytes}
+    }
+    try:
+        r = requests.post(URL, headers={"X-Client-Cert-Fingerprint": FP},
+                          json={"sensor_id": SENSOR, "site_id": SITE, "events": [ev]}, timeout=5)
+        print(proto, c[2], "->", c[4], conn_state, function_code, r.status_code, flush=True)
+    except Exception as e:
+        print("forward error:", e, flush=True)

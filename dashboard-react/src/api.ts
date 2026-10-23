@@ -88,9 +88,10 @@ export interface OpProtocol {
   events_5min: number;
   completed_5min: number;
   devices_seen: number;
+  successful_devices: number;
   last_event: string | null;
   seconds_since_event: number | null;
-  status: "active" | "idle";
+  status: "active" | "idle" | "offline";
 }
 export interface OpAlertSummary {
   open_queue: number;

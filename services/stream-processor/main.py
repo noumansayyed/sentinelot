@@ -52,19 +52,29 @@ BASELINE_MIN_SAMPLES = 30
 ZSCORE_THRESHOLD = 4.5
 
 
-async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str, protocol: str) -> tuple[UUID, bool]:
+async def upsert_asset(pool: asyncpg.Pool, site_id: UUID, ip: str, protocol: str, touch_last_seen: bool = True) -> tuple[UUID, bool]:
     row = await pool.fetchrow(
         "SELECT id FROM assets WHERE site_id = $1 AND ip_address = $2",
         site_id, ip,
     )
     if row is not None:
-        await pool.execute(
-            """UPDATE assets SET last_seen = now(),
-                   protocols = CASE WHEN $2 = ANY(protocols) THEN protocols
-                                     ELSE array_append(protocols, $2) END
-               WHERE id = $1""",
-            row["id"], protocol,
-        )
+        if touch_last_seen:
+            await pool.execute(
+                """UPDATE assets SET last_seen = now(),
+                       protocols = CASE WHEN $2 = ANY(protocols) THEN protocols
+                                         ELSE array_append(protocols, $2) END
+                   WHERE id = $1""",
+                row["id"], protocol,
+            )
+        else:
+            # Still add the protocol but don't bump last_seen
+            await pool.execute(
+                """UPDATE assets SET
+                       protocols = CASE WHEN $2 = ANY(protocols) THEN protocols
+                                         ELSE array_append(protocols, $2) END
+                   WHERE id = $1""",
+                row["id"], protocol,
+            )
         return row["id"], False
 
     new_id = uuid4()
@@ -227,7 +237,7 @@ async def update_baseline_and_check(
 
 async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, event: dict) -> None:
     src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"], event["protocol"])
-    dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"], event["protocol"])
+    dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"], event["protocol"], touch_last_seen=False)
 
     ts = datetime.fromisoformat(event["timestamp"])
     function_code = event.get("function_code")
