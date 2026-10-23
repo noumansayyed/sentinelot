@@ -39,12 +39,14 @@ async def operations(site_id: UUID, _: dict = Depends(lambda: None)):
 
         # Real completions per asset (last 60s) — for honest "active" status
         completions = await pool.fetch("""
-            SELECT src_asset_id AS asset_id, count(*) AS n, max(time) AS last_completed
-            FROM protocol_events
-            WHERE site_id = $1
-              AND function_code IS NOT NULL
-              AND time > now() - interval '30 seconds'
-            GROUP BY src_asset_id
+            SELECT asset_id, count(*) AS n, max(time) AS last_completed
+            FROM (
+                SELECT src_asset_id AS asset_id, time FROM protocol_events
+                WHERE site_id = $1 AND function_code IS NOT NULL AND time > now() - interval '30 seconds'
+                UNION ALL
+                SELECT dst_asset_id AS asset_id, time FROM protocol_events
+                WHERE site_id = $1 AND function_code IS NOT NULL AND time > now() - interval '30 seconds'
+            ) sub WHERE asset_id IS NOT NULL GROUP BY asset_id
         """, site_id)
         completed_map = {str(r["asset_id"]): (r["n"], r["last_completed"]) for r in completions if r["asset_id"]}
 

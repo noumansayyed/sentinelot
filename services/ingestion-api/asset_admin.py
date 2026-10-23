@@ -176,3 +176,19 @@ async def asset_inbox(site_id: UUID, _: dict = Depends(lambda: None)):
         ]}
     finally:
         await pool.close()
+
+@router.delete("/v1/assets/{asset_id}")
+async def delete_asset(asset_id: UUID, _: dict = Depends(lambda: None)):
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # 1. Delete dependent protocol_events
+                await conn.execute("DELETE FROM protocol_events WHERE src_asset_id = $1 OR dst_asset_id = $1", asset_id)
+                # 2. Delete dependent alerts
+                await conn.execute("DELETE FROM alerts WHERE asset_id = $1", asset_id)
+                # 3. Delete the asset itself
+                await conn.execute("DELETE FROM assets WHERE id = $1", asset_id)
+        return {"status": "deleted"}
+    finally:
+        await pool.close()

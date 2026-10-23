@@ -11,10 +11,11 @@ import json
 import time
 import requests
 
-LOG_PATH = "/home/user/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log"
+LOG_PATH = "/logs/zeek/modbus.log"
 INGEST_URL = "http://sentinelot-ingestion-api-1:8000/v1/ingest/events"
 SENSOR_ID = "33333333-3333-3333-3333-333333333333"
-SITE_ID = "22222222-2222-2222-2222-222222222222"
+import os
+SITE_ID = os.environ.get("SITE_ID", "22222222-2222-2222-2222-222222222222")
 FINGERPRINT = "dev-test-fingerprint-000"
 
 FIELDS = ["ts", "uid", "id.orig_h", "id.orig_p", "id.resp_h", "id.resp_p",

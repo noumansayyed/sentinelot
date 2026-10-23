@@ -1,7 +1,8 @@
 import time, requests
 LOG="/logs/zeek/conn.log"
 URL="http://sentinelot-ingestion-api-1:8000/v1/ingest/events"
-SENSOR="33333333-3333-3333-3333-333333333333"; SITE="22222222-2222-2222-2222-222222222222"
+SENSOR="33333333-3333-3333-3333-333333333333"; import os
+SITE=os.environ.get("SITE_ID", "22222222-2222-2222-2222-222222222222")
 FP="dev-test-fingerprint-000"
 PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua"}
 last={}

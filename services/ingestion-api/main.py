@@ -308,7 +308,5 @@ async def update_alert_status(
     if not updated:
         raise HTTPException(status_code=404, detail="alert not found")
     return {"id": str(alert_id), "status": req.status, "acknowledged_by": req.acknowledged_by}
-from reports import router as reports_router
-app.include_router(reports_router)
 from report_api import router as report_api_router
 app.include_router(report_api_router)

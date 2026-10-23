@@ -80,6 +80,7 @@ export interface OpDevice {
   first_seen: string | null;
   last_seen: string | null;
   status: "active" | "idle" | "offline";
+  hidden: boolean;
   seconds_since_seen: number | null;
 }
 export interface OpProtocol {
@@ -109,12 +110,7 @@ export async function fetchOperations(siteId: string = SITE_ID): Promise<Operati
   return await res.json();
 }
 export interface SiteSummary { id: string; name: string; device_count: number }
-export async function fetchSites(tenantId: string = "11111111-1111-1111-1111-111111111111"): Promise<SiteSummary[]> {
-  const res = await authed(`${API_BASE}/v1/tenants/${tenantId}/sites`);
-  if (!res.ok) throw new Error(`sites HTTP ${res.status}`);
-  const j = await res.json();
-  return j.sites || [];
-}
+
 
 // ---------- Device registry (static lab metadata) ----------
 export const REGISTRY: Record<string, { name: string; role: string; known: boolean }> = {
@@ -350,4 +346,41 @@ export async function fetchReportData(siteId: string = SITE_ID): Promise<ReportD
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/report-data`);
   if (!res.ok) throw new Error(`report HTTP ${res.status}`);
   return await res.json();
+}
+
+export interface SiteInfo { id: string; name: string }
+
+export async function fetchSites(): Promise<SiteInfo[]> {
+  const res = await authed(`http://localhost:8000/v1/tenants/11111111-1111-1111-1111-111111111111/sites`);
+  if (!res.ok) return [{id: SITE_ID, name: "Pune Pilot Plant"}];
+  return (await res.json()).sites || [];
+}
+
+export async function createSite(name: string): Promise<SiteInfo> {
+  const res = await authed(`http://localhost:8000/v1/tenants/11111111-1111-1111-1111-111111111111/sites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, actor: "operator" })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+export async function getEnrollmentToken(siteId: string): Promise<string> {
+  const res = await authed(`http://localhost:8000/v1/sites/${siteId}/enrollment-token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actor: "operator" })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).token;
+}
+
+export async function updateSite(siteId: string, name: string): Promise<void> {
+  const res = await authed(`http://localhost:8000/v1/sites/${siteId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, actor: "operator" })
+  });
+  if (!res.ok) throw new Error(await res.text());
 }

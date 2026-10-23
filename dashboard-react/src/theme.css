@@ -263,3 +263,14 @@ html, body, #root {
     background: transparent !important;
   }
 }
+
+/* Ensure only the report body prints */
+@media print {
+  .no-print, .no-print * {
+    display: none !important;
+  }
+  .print-target {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

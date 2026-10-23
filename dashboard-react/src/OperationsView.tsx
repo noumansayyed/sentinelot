@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { getToken } from "./api";
 import {
   fetchOperations, Operations, OpDevice,
   fetchAssetInbox, classifyAsset, bulkClassify, InboxAsset, SITE_ID,
@@ -49,6 +50,25 @@ export default function OperationsView({ card }: Props) {
   const [lastClicked, setLastClicked] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu]     = useState<{ device: OpDevice; x: number; y: number } | null>(null);
   const [rolePicker, setRolePicker] = useState<{ target: "one" | "bulk"; device?: OpDevice } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [viewMode, setViewMode] = useState<"live" | "all" | "custom">("live");
+  const [customRange, setCustomRange] = useState<"today" | "week" | "month" | "picker">("today");
+  const [rangeStart, setRangeStart] = useState<string>("");
+  const [rangeEnd, setRangeEnd] = useState<string>("");
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        // Only close if we are in custom mode
+        setIsCustomOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function refresh() {
     try {
@@ -58,11 +78,38 @@ export default function OperationsView({ card }: Props) {
       setErr("");
     } catch(e:any) { setErr(e.message); }
   }
-  useEffect(() => { refresh(); const id = setInterval(refresh, 3000); return () => clearInterval(id); }, []);
+  useEffect(() => { refresh(); const id = setInterval(refresh, 1000); return () => clearInterval(id); }, []);
 
   if (!ops) return <div style={{padding:20,color:"var(--text-3)"}}>Loading plant state…</div>;
 
   const devices = ops.devices.filter(d => {
+    // 1. Hide archived (older than 24h) unless "All" or "Custom" view is selected
+    const ageDays = d.seconds_since_seen !== null ? d.seconds_since_seen / 86400 : null;
+    
+    if (viewMode === "live") {
+      // Live: only active or idle, seen in the last hour
+      if (d.status !== "active" && d.status !== "idle") return false;
+      if (ageDays !== null && ageDays > 1) return false;
+    } else if (viewMode === "custom") {
+      // Custom: filter by date range based on last_seen
+      if (d.seconds_since_seen === null) return false;
+      const lastSeenMs = Date.now() - (d.seconds_since_seen * 1000);
+      if (customRange === "today") {
+        const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+        if (lastSeenMs < startOfDay.getTime()) return false;
+      } else if (customRange === "week") {
+        if (lastSeenMs < Date.now() - 7 * 86400000) return false;
+      } else if (customRange === "month") {
+        if (lastSeenMs < Date.now() - 30 * 86400000) return false;
+      } else if (customRange === "picker") {
+        if (rangeStart && lastSeenMs < new Date(rangeStart).getTime()) return false;
+        if (rangeEnd && lastSeenMs > new Date(rangeEnd).getTime() + 86400000) return false;
+      }
+    }
+    // "all" view: no time/status filter
+    
+    if (!showHidden && d.hidden) return false;
+    
     if (filter === "") return true;
     const f = filter.toLowerCase();
     return d.ip.toLowerCase().includes(f) || d.role.toLowerCase().includes(f)
@@ -130,10 +177,30 @@ export default function OperationsView({ card }: Props) {
     }
   }
   async function handleDelete(d: OpDevice) {
-    if (!confirm(`Delete ${d.ip}? This cannot be undone.`)) return;
+    // Check if the device is classified (known or has a role)
+    const isKnown = isKnown(d.ip);
+    const hasRole = d.role !== "unknown";
+    
+    let warning = `Permanently delete ${d.ip}?\n\nThis will remove all history.`;
+    
+    if (isKnown || hasRole) {
+      warning += `\n\n⚠ WARNING: This device is currently ${isKnown ? "APPROVED AS KNOWN" : ""}${isKnown && hasRole ? " and " : ""}${hasRole ? `assigned the role "${d.role.toUpperCase()}"` : ""}.`;
+      warning += `\n\nIf you delete it, it will lose its classification and reappear as an UNCLASSIFIED device with a "New Device" alert the next time it talks.`;
+      warning += `\n\nAre you sure you want to proceed?`;
+    } else {
+      warning += `\n\nIf the device is still on the network, it will reappear as a NEW device.`;
+    }
+    
+    if (!confirm(warning)) return;
     setBusy(true);
-    try { await classifyAsset(d.asset_id, { actor: ACTOR, hidden: true, reason: "deleted by operator" }); await refresh(); }
-    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    try {
+      const res = await fetch(`http://localhost:8000/v1/assets/${d.asset_id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await refresh();
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
   async function handleApproveKnown(d: OpDevice) {
     setBusy(true);
@@ -256,13 +323,50 @@ export default function OperationsView({ card }: Props) {
         </div>
       </div>
 
-      <div className="float-in-3 glass" style={{ padding:18, display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
+      <div className="float-in-3 glass" style={{ padding:18, display:"flex", gap:14, alignItems:"center", flexWrap:"wrap", overflow: "visible", position: "relative", zIndex: 50 }}>
         <input value={filter} onChange={e=>setFilter(e.target.value)}
           placeholder="Search IP, role, protocol…"
           style={{ background:"var(--glass-2)", border:"1px solid var(--hairline-light)",
                    borderRadius:12, color:"var(--text-1)", padding:"10px 16px",
                    fontSize:14, width:320, fontFamily:"var(--font-sans)", outline:"none" }}/>
         <span style={{flex:1}}/>
+        
+        {/* INLINE FILTERS */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginRight:16 }}>
+          <span style={{ fontSize:11, fontWeight:600, color:"var(--text-3)" }}>VIEW:</span>
+          <button onClick={() => setViewMode("live")} className={viewMode === "live" ? "btn btn-primary" : "btn"} style={{ padding: "6px 12px", fontSize: 11 }}>Live</button>
+          <button onClick={() => setViewMode("all")} className={viewMode === "all" ? "btn btn-primary" : "btn"} style={{ padding: "6px 12px", fontSize: 11 }}>All</button>
+          
+          <div style={{ position:"relative" }} ref={dropdownRef}>
+            <button onClick={() => { setViewMode("custom"); setIsCustomOpen(!isCustomOpen); }} className={viewMode === "custom" ? "btn btn-primary" : "btn"} style={{ padding: "6px 12px", fontSize: 11 }}>Customize ▾</button>
+            {isCustomOpen && (
+              <div className="glass-3" style={{ position:"absolute", top:"100%", right:0, marginTop:8, padding:8, borderRadius:12, zIndex: 9999, display:"flex", flexDirection:"column", gap:4, width:200, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}>
+                <button onClick={() => { setCustomRange("today"); setIsCustomOpen(false); }} className={customRange === "today" ? "btn btn-primary" : "btn"} style={{ fontSize:11, padding:"4px 8px", textAlign:"left" }}>Today</button>
+                <button onClick={() => { setCustomRange("week"); setIsCustomOpen(false); }} className={customRange === "week" ? "btn btn-primary" : "btn"} style={{ fontSize:11, padding:"4px 8px", textAlign:"left" }}>Last 7 days</button>
+                <button onClick={() => { setCustomRange("month"); setIsCustomOpen(false); }} className={customRange === "month" ? "btn btn-primary" : "btn"} style={{ fontSize:11, padding:"4px 8px", textAlign:"left" }}>Last 30 days</button>
+                <button onClick={() => setCustomRange("picker")} className={customRange === "picker" ? "btn btn-primary" : "btn"} style={{ fontSize:11, padding:"4px 8px", textAlign:"left" }}>Custom range…</button>
+                
+                {customRange === "picker" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8, borderTop: "1px solid var(--hairline-light)", paddingTop: 8 }}>
+                    <input type="date" value={rangeStart} onChange={e => { setRangeStart(e.target.value); if(rangeEnd) setIsCustomOpen(false); }}
+                      style={{ background: "var(--glass-2)", color: "var(--text-1)", border: "1px solid var(--hairline-light)", borderRadius: 6, padding: "4px 8px", fontSize: 11 }} />
+                    <input type="date" value={rangeEnd} onChange={e => { setRangeEnd(e.target.value); if(rangeStart) setIsCustomOpen(false); }}
+                      style={{ background: "var(--glass-2)", color: "var(--text-1)", border: "1px solid var(--hairline-light)", borderRadius: 6, padding: "4px 8px", fontSize: 11 }} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <label style={{fontSize:11, color:"var(--text-2)", display:"flex", alignItems:"center", gap:6, marginLeft:8}}>
+            <input type="checkbox" checked={showHidden} onChange={e=>setShowHidden(e.target.checked)}/>
+            Show hidden
+          </label>
+          <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>
+            {devices.length} of {ops.devices.length}
+          </span>
+        </div>
+
         {selected.size > 0 && (
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
             <span className="t-body" style={{ color:"var(--accent)", fontWeight:600 }}>
