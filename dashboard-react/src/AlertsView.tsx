@@ -54,6 +54,13 @@ export default function AlertsView({ card }: Props) {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (detail) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [detail]);
+
   async function doAction(a: Alert, action: "acknowledge" | "resolve" | "false_positive" | "escalate") {
     const verb = action === "false_positive" ? "mark as false positive" : action;
     const reason = prompt(`${verb.toUpperCase()} — ${a.description.slice(0, 60)}…\nReason (required):`);
@@ -111,7 +118,7 @@ export default function AlertsView({ card }: Props) {
   const categories = ["All", "New device", "Off-hours", "Unauthorized write", "Timing anomaly", "Signature match", "Rule match"];
 
   return (
-    <div className="float-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* HEADER & MAIN FILTERS */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
@@ -238,57 +245,110 @@ export default function AlertsView({ card }: Props) {
 
       {/* DETAIL PANEL (Same as before) */}
       {detail && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }} onClick={() => setDetail(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="glass-3 float-in" style={{ padding: 28, width: 720, maxWidth: "92vw", maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+        <div style={{ position: "fixed", inset: 0, background: "#ffffff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      zIndex: 10000 }}
+             onClick={() => setDetail(null)}>
+          <div onClick={(e) => e.stopPropagation()}
+               className="glass-3 float-in"
+               style={{ padding: 0, width: "min(1400px, 96vw)", height: "min(92vh, 900px)",
+                        display: "flex", flexDirection: "column", overflow: "hidden",
+                        borderRadius: 16, background: "var(--bg-0)" }}>
+
+            <div style={{ padding: "24px 32px", borderBottom: "1px solid var(--hairline-light)",
+                          display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div>
-                <div style={{ fontSize: 11, color: "var(--text-3)", letterSpacing: "0.5px", fontWeight: 600, marginBottom: 6 }}>{detail.severity.toUpperCase()} · {detail.status.toUpperCase()}</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ background: SEV_COLOR[detail.severity] || "var(--text-3)", color: "#fff",
+                                 fontSize: 10, fontWeight: 700, letterSpacing: "0.5px",
+                                 padding: "3px 10px", borderRadius: 4 }}>
+                    {detail.severity.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 11, color: STATUS_BADGE[detail.status] || "var(--text-3)", fontWeight: 600, letterSpacing: "0.3px" }}>
+                    {detail.status.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                    {new Date(detail.time).toLocaleString()}
+                  </span>
+                </div>
                 <div className="t-h2" style={{ margin: 0 }}>Alert details</div>
               </div>
-              <button onClick={() => setDetail(null)} className="btn" style={{ padding: "6px 12px", fontSize: 12 }}>Close</button>
+              <button onClick={() => setDetail(null)} className="btn" style={{ padding: "8px 16px" }}>Close</button>
             </div>
 
-            <div style={{ background: "var(--glass-2)", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-              <div className="t-meta" style={{ marginBottom: 4 }}>What happened</div>
-              <div className="t-body" style={{ color: "var(--text-1)" }}>{detail.description}</div>
-              <div className="t-meta" style={{ marginTop: 12, fontFamily: "var(--font-mono)", fontSize: 11 }}>{new Date(detail.time).toLocaleString()}</div>
-            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
+                          gap: 0, flex: 1, overflow: "hidden", height: "100%" }}>
 
-            {pbLoading && <div style={{ padding: 20, textAlign: "center", color: "var(--text-3)" }}>Generating analyst playbook…</div>}
-
-            {playbook && (
-              <>
-                <div style={{ marginBottom: 16 }}><div className="t-h3" style={{ marginBottom: 8, color: "var(--accent)" }}>What</div><div className="t-body">{playbook.what}</div></div>
-                <div style={{ marginBottom: 16 }}><div className="t-h3" style={{ marginBottom: 8, color: "var(--warning)" }}>Why it matters</div><div className="t-body">{playbook.why}</div></div>
-                <div style={{ marginBottom: 16 }}>
-                  <div className="t-h3" style={{ marginBottom: 8, color: "var(--success)" }}>Recommended actions</div>
-                  <ol style={{ margin: 0, paddingLeft: 20, color: "var(--text-2)", lineHeight: 1.7 }}>
-                    {playbook.actions.map((a, i) => (
-                      <li key={i} style={{ marginBottom: 8 }}><strong style={{ color: "var(--text-1)" }}>{a.step}</strong><div className="t-meta" style={{ marginTop: 2 }}>{a.detail}</div></li>
-                    ))}
-                  </ol>
+              <div style={{ padding: "28px 32px", overflowY: "auto", height: "100%",
+                            borderRight: "1px solid var(--hairline-light)" }}>
+                <div className="t-meta" style={{ marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px", fontSize: 11 }}>What happened</div>
+                <div style={{ color: "var(--text-1)", fontSize: 15, lineHeight: 1.7, marginBottom: 28 }}>
+                  {detail.description}
                 </div>
-                <div style={{ marginBottom: 16 }}><div className="t-h3" style={{ marginBottom: 8, color: "var(--danger)" }}>When to escalate</div><div className="t-body">{playbook.escalate}</div></div>
-                <div className="t-meta" style={{ fontSize: 11, fontStyle: "italic" }}>Generated by {playbook.model} · {playbook.cached ? "cached" : "fresh"}</div>
-              </>
-            )}
 
-            {!pbLoading && !playbook && <div style={{ padding: 20, textAlign: "center", color: "var(--text-3)" }}>Playbook generation failed. Check that the Ollama container is running.</div>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {detail.status === "open" && (
+                    <>
+                      <button onClick={() => doAction(detail, "acknowledge")} disabled={busy} className="btn" style={{ padding: "12px 20px", justifyContent: "flex-start", textAlign: "left" }}>✓  Acknowledge</button>
+                      <button onClick={() => doAction(detail, "resolve")} disabled={busy} className="btn" style={{ padding: "12px 20px", justifyContent: "flex-start", textAlign: "left", color: "var(--success)" }}>✓  Resolve</button>
+                      <button onClick={() => doAction(detail, "false_positive")} disabled={busy} className="btn" style={{ padding: "12px 20px", justifyContent: "flex-start", textAlign: "left" }}>✗  False positive</button>
+                    </>
+                  )}
+                  {detail.status === "acknowledged" && (
+                    <>
+                      <button onClick={() => doAction(detail, "escalate")} disabled={busy} className="btn" style={{ padding: "12px 20px", justifyContent: "flex-start", textAlign: "left", color: "var(--violet)" }}>↑  Escalate</button>
+                      <button onClick={() => doAction(detail, "resolve")} disabled={busy} className="btn" style={{ padding: "12px 20px", justifyContent: "flex-start", textAlign: "left", color: "var(--success)" }}>✓  Resolve</button>
+                    </>
+                  )}
+                </div>
+              </div>
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--hairline-light)" }}>
-              {detail.status === "open" && (
-                <>
-                  <button onClick={() => doAction(detail, "acknowledge")} disabled={busy} className="btn">Acknowledge</button>
-                  <button onClick={() => doAction(detail, "resolve")} disabled={busy} className="btn" style={{ color: "var(--success)" }}>Resolve</button>
-                  <button onClick={() => doAction(detail, "false_positive")} disabled={busy} className="btn">False positive</button>
-                </>
-              )}
-              {detail.status === "acknowledged" && (
-                <>
-                  <button onClick={() => doAction(detail, "escalate")} disabled={busy} className="btn" style={{ color: "var(--violet)" }}>Escalate</button>
-                  <button onClick={() => doAction(detail, "resolve")} disabled={busy} className="btn" style={{ color: "var(--success)" }}>Resolve</button>
-                </>
-              )}
+              <div style={{ padding: "28px 32px", overflowY: "auto", height: "100%" }}>
+                {pbLoading && (
+                  <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>
+                    <div className="t-h3" style={{ marginBottom: 8 }}>Generating analyst playbook…</div>
+                    <div className="t-meta">qwen2.5:1.5b is analyzing this alert</div>
+                  </div>
+                )}
+
+                {playbook && (
+                  <>
+                    <div style={{ marginBottom: 24 }}>
+                      <div className="t-h3" style={{ marginBottom: 10, color: "var(--accent)" }}>What</div>
+                      <div style={{ fontSize: 15, lineHeight: 1.7, color: "var(--text-1)" }}>{playbook.what}</div>
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <div className="t-h3" style={{ marginBottom: 10, color: "var(--warning)" }}>Why it matters</div>
+                      <div style={{ fontSize: 15, lineHeight: 1.7, color: "var(--text-1)" }}>{playbook.why}</div>
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <div className="t-h3" style={{ marginBottom: 10, color: "var(--success)" }}>Recommended actions</div>
+                      <ol style={{ margin: 0, paddingLeft: 20, color: "var(--text-2)", lineHeight: 1.8 }}>
+                        {playbook.actions.map((a, i) => (
+                          <li key={i} style={{ marginBottom: 14 }}>
+                            <strong style={{ color: "var(--text-1)", fontSize: 14 }}>{a.step}</strong>
+                            <div className="t-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>{a.detail}</div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <div className="t-h3" style={{ marginBottom: 10, color: "var(--danger)" }}>When to escalate</div>
+                      <div style={{ fontSize: 15, lineHeight: 1.7, color: "var(--text-1)" }}>{playbook.escalate}</div>
+                    </div>
+                    <div className="t-meta" style={{ fontSize: 11, fontStyle: "italic", paddingTop: 16, borderTop: "1px solid var(--hairline-light)" }}>
+                      Generated by {playbook.model} · {playbook.cached ? "cached" : "fresh"}
+                    </div>
+                  </>
+                )}
+
+                {!pbLoading && !playbook && (
+                  <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>
+                    Playbook unavailable. Check that Ollama is running.
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         </div>

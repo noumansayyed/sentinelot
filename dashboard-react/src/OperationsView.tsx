@@ -48,6 +48,7 @@ export default function OperationsView({ card }: Props) {
   const [selected, setSelected]   = useState<Set<string>>(new Set());
   const [busy, setBusy]           = useState(false);
   const [lastClicked, setLastClicked] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [ctxMenu, setCtxMenu]     = useState<{ device: OpDevice; x: number; y: number } | null>(null);
   const [rolePicker, setRolePicker] = useState<{ target: "one" | "bulk"; device?: OpDevice } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -79,6 +80,12 @@ export default function OperationsView({ card }: Props) {
     } catch(e:any) { setErr(e.message); }
   }
   useEffect(() => { refresh(); const id = setInterval(refresh, 1000); return () => clearInterval(id); }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await refresh();
+    setTimeout(() => setRefreshing(false), 500);
+  }
 
   if (!ops) return <div style={{padding:20,color:"var(--text-3)"}}>Loading plant state…</div>;
 
@@ -315,7 +322,7 @@ export default function OperationsView({ card }: Props) {
                 </div>
                 <ECGTrace protocol={p} events={f?.completed_5min || 0} color={color} active={!!active}/>
                 <div className="t-meta" style={{ marginTop:6 }}>
-                  {offline ? "no traffic in 5 min" : "Passive sensor active"}
+                  {!f || (f.events_5min || 0) === 0 ? "no traffic in 5 min" : "Passive sensor active"}
                 </div>
               </div>
             );
@@ -365,6 +372,19 @@ export default function OperationsView({ card }: Props) {
           <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 8 }}>
             {devices.length} of {ops.devices.length}
           </span>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="btn"
+            style={{ padding: "4px 10px", fontSize: 11, marginLeft: 8,
+                     display: "inline-flex", alignItems: "center", gap: 4 }}
+            title="Refresh now"
+          >
+            <span style={{ display: "inline-block",
+                           animation: refreshing ? "spin 700ms linear infinite" : "none",
+                           fontSize: 13 }}>⟳</span>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
         </div>
 
         {selected.size > 0 && (
