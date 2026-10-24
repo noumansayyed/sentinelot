@@ -79,6 +79,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       KEYCLOAK_ISSUER_URL: http://localhost:8080/realms/sentinelot
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/sentinelot
+      OLLAMA_URL: http://ollama:11434
     ports:
       - "8000:8000"
 

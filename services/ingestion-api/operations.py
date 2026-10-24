@@ -7,7 +7,7 @@ import asyncpg, os
 router = APIRouter()
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-RECENT_WINDOW_SEC = 10   # single source of truth: any device/protocol event within this window is "not offline"
+RECENT_WINDOW_SEC = 30   # single source of truth: any device/protocol event within this window is "not offline"
 
 # A device is:
 #   ACTIVE  — has a successful exchange (READ_*, WRITE_*, CONNECT_SUCCESS) in RECENT_WINDOW

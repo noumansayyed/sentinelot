@@ -324,7 +324,7 @@ export default function AlertsView({ card }: Props) {
                     <div style={{ marginBottom: 24 }}>
                       <div className="t-h3" style={{ marginBottom: 10, color: "var(--success)" }}>Recommended actions</div>
                       <ol style={{ margin: 0, paddingLeft: 20, color: "var(--text-2)", lineHeight: 1.8 }}>
-                        {playbook.actions.map((a, i) => (
+                        {(Array.isArray(playbook.actions) ? playbook.actions : []).map((a, i) => (
                           <li key={i} style={{ marginBottom: 14 }}>
                             <strong style={{ color: "var(--text-1)", fontSize: 14 }}>{a.step}</strong>
                             <div className="t-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>{a.detail}</div>
