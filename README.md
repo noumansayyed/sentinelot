@@ -1,78 +1,160 @@
 # SentinelOT
-
 Passive OT/IIoT asset-visibility and threat-detection platform. Runs on one laptop with Docker.
-Dashboard: http://localhost:3000    OpenPLC page: http://localhost:8090/dashboard
-Live demo / SPAN instructions: validation/runbooks/span_demo.md
 
-## 1. Daily start (same laptop)
-1. Start Docker Desktop. Wait for "running".
-2. Open Ubuntu and run (about 2 minutes, do not press Ctrl+C):
+- Dashboard: http://localhost:3000
+- OpenPLC:   http://localhost:8090/dashboard
+
+## Daily Start (existing setup)
+
+```bash
 ~/sentinelot/start.sh
-3. Open http://localhost:8090/dashboard, log in (default openplc / openplc), press Start PLC if it is stopped.
-4. Open http://localhost:3000 and press Ctrl+Shift+R.
-5. Attack demo:
-docker start rogue-device
-start.sh keeps all data. Never wipe the database before a demo.
-Use the same browser: the Audit Report and KNOWN/UNKNOWN approvals are saved in the browser.
+```
 
-## 2. Demo order
-1. Live Command: PLC chart, then the four protocol cards, then Alerts by Type.
-2. Run: docker start rogue-device. The device .213 shows UNKNOWN and an Unauthorized write alert appears.
-3. Acknowledge the alert (enter name and reason), then open Audit Report and Download CSV.
-4. Historical Analytics: filter, change action, device column.
-Modbus has full message-level detection. S7comm, DNP3 and OPC-UA show real connections seen by Zeek (connection-level).
+When prompted:
+- Backend already running? → `n`
+- Lab devices → `a` (all)
 
-## 3. Off-hours demo
-Rule: services/stream-processor/main.py, function is_off_hours (India time).
-~/sentinelot/set-offhours.sh 14
-(use the current hour, 24h clock). Wait about 1 minute: each device still talking gets an Off-hours alert (once per 15 min per device).
-Back to normal:
-~/sentinelot/set-offhours.sh 22
+If backend was stopped: → `y` to restart it.
 
-## 4. Setup on a new laptop/PC (nothing needed from the old one)
-1. PowerShell as Administrator, then restart when asked and create the Ubuntu username and password:
-wsl --install -d Ubuntu
-2. Install Docker Desktop (https://www.docker.com/products/docker-desktop), keep "Use WSL 2" ticked.
-   Settings > Resources > WSL integration > turn ON Ubuntu > Apply and restart.
-3. In Ubuntu:
+After start, go to http://localhost:8090/dashboard, log in (openplc / openplc), click **Start PLC** if stopped.
+
+## First-Time Setup (new machine)
+
+```bash
+# 1. Install dependencies
 sudo apt update && sudo apt install -y git curl openssl python3
-docker version
-(docker version must show Client and Server.)
-4. Download the project (private repo: username + GitHub personal access token, not your password):
-git clone https://github.com/noumansayyed/sentinelot.git ~/sentinelot && cd ~/sentinelot
-5. Create the passwords file:
+
+# 2. Install Docker
+sudo apt install -y docker.io
+sudo systemctl enable docker --now
+sudo usermod -aG docker $USER
+newgrp docker
+
+# 3. Install docker-compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# 4. Clone repo
+git clone https://github.com/noumansayyed/sentinelot.git ~/sentinelot
+cd ~/sentinelot
+
+# 5. Create env file
 bash setup/make-env.sh
-6. Create the lab network. Find the interface name first (usually eth0), edit it if different, then create:
-ip -br a
-sed -i 's/parent=eth0/parent=YOUR_INTERFACE/' setup/network.txt
+
+# 6. Create lab network (check your interface with: ip -br a)
 bash setup/network.txt
-7. Build and start everything (30 to 60 minutes the first time, do not press Ctrl+C):
+
+# 7. Build everything (30-60 min, do not Ctrl+C)
 bash setup/new-machine.sh
-8. Open http://localhost:8090/dashboard, log in (openplc / openplc), upload the counter program zeek-lab/openplc-program/simple_plc.st, compile, press Start PLC.
-9. Optional: load the saved devices and alerts (replaces current data):
-bash setup/restore-data.sh
-10. Start the system:
+
+# 8. Seed database
+docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "
+INSERT INTO tenants (id, name) VALUES ('11111111-1111-1111-1111-111111111111', 'Demo Tenant') ON CONFLICT DO NOTHING;
+INSERT INTO sites (id, tenant_id, name) VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Pune Pilot Plant') ON CONFLICT DO NOTHING;
+INSERT INTO sensors (id, site_id, label, mtls_cert_fingerprint, status) VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'dev-sensor', 'dev-test-fingerprint-000', 'online') ON CONFLICT DO NOTHING;
+"
+
+# 9. Import demo data
+docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy assets(id,site_id,mac_address,ip_address,vendor_oui,device_role,protocols,criticality,first_seen,last_seen,baseline_mean_interval,baseline_m2,baseline_count,last_event_at) from stdin csv header" < setup/data/assets.csv
+docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy alerts(id,time,tenant_id,site_id,asset_id,rule_id,severity,description,status,evidence,llm_explanation,acknowledged_by,acknowledged_at) from stdin csv header" < setup/data/alerts.csv
+docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy protocol_events from stdin csv header" < setup/data/protocol_events.csv
+
+# 10. Fix DB columns
+docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "
+ALTER TABLE assets ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE;
+ALTER TABLE assets ADD COLUMN IF NOT EXISTS hidden_reason TEXT;
+ALTER TABLE assets ADD COLUMN IF NOT EXISTS role_manual TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;
+"
+
+# 11. Setup Keycloak login
+bash setup/keycloak-import.sh
+
+# 12. Pull LLM model (986MB)
+docker run -d --name ollama --network sentinelot_default -p 11434:11434 --restart unless-stopped ollama/ollama
+sleep 5
+docker exec ollama ollama pull qwen2.5:1.5b
+
+# 13. Start zeek-bridge with correct mount
+docker rm -f zeek-bridge
+docker run -d --name zeek-bridge --network sentinelot_default \
+  -v ~/sentinelot/zeek-lab/real-sensor/logs:/logs \
+  --restart unless-stopped sentinelot-zeek-bridge
+
+# 14. Run start.sh
 ~/sentinelot/start.sh
-11. Open http://localhost:3000 and press Ctrl+Shift+R.
+```
 
-## 5. Save and load the data
-Save current devices, alerts and events into the repo:
-cd ~/sentinelot && bash setup/export-data.sh && git add -A && git commit -m "Save data" && git push
-Load them on any machine: bash setup/restore-data.sh
-The audit log is stored in the browser: open Audit Report and press Download CSV, then keep the file in setup/data/.
+## Troubleshooting
 
-## 6. Problems
-- start.sh says "No such container": run step 7 of section 4 first (new machine).
-- Dashboard shows Failed to fetch or is empty: bash setup/keycloak-import.sh (realm import 201 or 409 is fine).
-- Stream processor log says password authentication failed: bash setup/fix-db.sh
-- Modbus card empty and chart says Waiting for PLC data: press Start PLC in the OpenPLC page, then run start.sh again.
-- mkdir Permission denied: sudo chown -R $USER:$USER ~/sentinelot
-- A rebuilt dashboard shows old screens: press Ctrl+Shift+R.
+| Problem | Fix |
+|---|---|
+| Dashboard empty / Failed to fetch | `bash setup/keycloak-import.sh` |
+| Modbus shows 0 devices | `docker restart zeek-bridge` |
+| Permission denied on logs | `sudo chown -R $USER:$USER ~/sentinelot/zeek-lab/real-sensor/logs` |
+| LLM not explaining alerts | `docker restart llm-triage` |
+| PLC page not loading | `docker restart plc-modbus` then re-upload program |
 
-## 7. Files that matter
-- start.sh: daily start. set-offhours.sh: change off-hours time.
-- setup/make-env.sh: creates .env (never stored in git). .env.example lists the keys.
-- setup/network.txt: lab network command. setup/recreate-lab.sh: lab device containers. setup/new-machine.sh: full setup.
-- setup/keycloak-realm.json, setup/keycloak-import.sh: login setup (operator / operator123).
-- setup/export-data.sh, setup/restore-data.sh, setup/data/: saved devices, alerts, events.
-- zeek-lab/: lab devices, sensor and PLC counter program. services/: backend. dashboard-react/: dashboard.
+## Architecture
+Lab devices (hmi, rogue, s7, dnp3, opcua, iiot)
+↓ traffic on sentinelot-net (172.28.240.x)
+real-sensor (Zeek + Suricata on eth1)
+↓ modbus.log / conn.log
+zeek-bridge / conn-bridge
+↓ HTTP POST /v1/ingest/events
+ingestion-api (FastAPI :8000)
+↓ Kafka/Redpanda
+stream-processor → PostgreSQL/TimescaleDB
+↓
+dashboard-react (:3000) + llm-triage (Ollama qwen2.5:1.5b)
+
+
+## Attack Demo
+
+```bash
+docker start rogue-device
+```
+Device 172.28.240.213 appears as UNKNOWN with Unauthorized Write alert.
+EOF
+
+# Rewrite PROJECT_STATUS
+cat > PROJECT_STATUS.md << 'EOF'
+# SentinelOT — Project Status
+
+## What is Working
+
+| Feature | Status |
+|---|---|
+| Passive capture (Zeek + Suricata + ICSNPP) | ✅ Live on eth1 |
+| Multi-protocol detection: Modbus, S7, DNP3, OPC-UA | ✅ |
+| Asset discovery (auto, passive) | ✅ |
+| Real-time alerts (new device, off-hours, unauthorized write, anomaly) | ✅ |
+| LLM plain-language explanations (qwen2.5:1.5b, local) | ✅ |
+| LLM playbook per alert | ✅ |
+| Dashboard with live operations view | ✅ |
+| Alerts with acknowledge/resolve/escalate | ✅ |
+| Audit log | ✅ |
+| Keycloak authentication | ✅ |
+| Compliance report generation | ✅ |
+| Rogue device demo | ✅ |
+| Off-hours detection demo | ✅ |
+
+## Known Issues / To Do
+
+| Item | Priority |
+|---|---|
+| Auto role classification (PLC/HMI/RTU) from protocol | Low — manual classification works |
+| SPAN/mirror port live demo on real network | Pending — needs managed switch |
+| Save ollama container in recreate-lab.sh | Medium |
+| Export updated data to setup/data/ CSVs | Medium |
+| Semester 8: validation against public ICS datasets | Pending |
+
+## How to Demo
+
+1. `~/sentinelot/start.sh` → backend `y` → devices `a`
+2. Open http://localhost:3000
+3. Show live devices going ACTIVE on Operations tab
+4. Show Alerts tab — click any alert for LLM playbook
+5. Run attack: `docker start rogue-device`
+6. Show rogue device appearing as UNKNOWN + Unauthorized Write alert
+7. Acknowledge alert, download Audit CSV
