@@ -120,7 +120,6 @@ export const REGISTRY: Record<string, { name: string; role: string; known: boole
   "172.28.240.218": { name: "dnp3-client", role: "DNP3 traffic generator", known: true },
   "172.28.240.217": { name: "iiot-sensor", role: "IIoT sensor", known: true },
   "172.28.240.214": { name: "s7-client", role: "S7 client", known: true },
-  "172.28.240.213": { name: "rogue-device", role: "UNAPPROVED device (rogue)", known: false },
   "172.28.240.212": { name: "hmi-device", role: "HMI operator station", known: true },
   "172.28.240.2":   { name: "plc-relay", role: "PLC relay", known: true },
   "172.28.240.211": { name: "plc-modbus", role: "PLC (Modbus server)", known: true },

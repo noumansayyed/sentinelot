@@ -9,8 +9,8 @@ RUN rm -rf /usr/local/zeek/lib/zeek/plugins/Zeek_JavaScript || true
 
 RUN zkg autoconfig --force
 RUN zkg install --force zeek/cisagov/icsnpp-modbus
-RUN zkg install --force zeek/cisagov/icsnpp-s7comm
-RUN zkg install --force zeek/cisagov/icsnpp-dnp3
+RUN zkg install --force zeek/cisagov/icsnpp-s7comm v2.0.0
+RUN zkg install --force zeek/cisagov/icsnpp-dnp3 v2.0.0
 RUN zkg install --force zeek/cisagov/icsnpp-opcua-binary
 
 RUN echo 'redef LogAscii::use_json = T;' >> /usr/local/zeek/share/zeek/site/local.zeek \

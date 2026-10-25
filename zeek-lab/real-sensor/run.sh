@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# IFACE defaults to eth0 (lab/Docker setup). For a real physical demo,
+# IFACE defaults to eth0 (lab/Docker setup). For a real physical deployment,
 # override with -e IFACE=<real NIC name> when the sensor is plugged into
 # a switch's mirror/SPAN port -- e.g. IFACE=eth1 or IFACE=enp0s3,
 # whatever `ip link` shows for the physical adapter.

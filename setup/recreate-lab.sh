@@ -10,7 +10,6 @@ docker rm -f llm-triage >/dev/null 2>&1; docker run -d --name llm-triage --netwo
 #docker rm -f ollama >/dev/null 2>&1; docker run -d --name ollama --network bridge -p 11434:11434 ollama/ollama; docker network connect sentinelot_default ollama
 docker rm -f iiot-sensor >/dev/null 2>&1; docker run -d --name iiot-sensor --network sentinelot-net --ip 172.28.240.217 sentinelot-iiot-sensor
 docker rm -f s7-client >/dev/null 2>&1; docker run -d --name s7-client --network sentinelot-net --ip 172.28.240.214 sentinelot-s7-client
-docker rm -f rogue-device >/dev/null 2>&1; docker run -d --name rogue-device --network sentinelot-net --ip 172.28.240.213 sentinelot-rogue
 docker rm -f hmi-device >/dev/null 2>&1; docker run -d --name hmi-device --network sentinelot-net --ip 172.28.240.212 sentinelot-hmi
 docker rm -f plc-relay >/dev/null 2>&1; docker run -d --name plc-relay --network bridge -p 8090:8090 alpine sh -c 'apk add --no-cache socat >/dev/null 2>&1 && socat TCP-LISTEN:8090,fork,reuseaddr,bind=0.0.0.0 TCP:172.28.240.211:8080'; docker network connect --ip 172.28.240.2 sentinelot-net plc-relay
 docker rm -f plc-modbus >/dev/null 2>&1; docker run -d --name plc-modbus --network sentinelot-net --ip 172.28.240.211 tuttas/openplc_v3

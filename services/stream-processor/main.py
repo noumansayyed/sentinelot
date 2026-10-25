@@ -230,7 +230,7 @@ async def update_baseline_and_check(
     is_anomaly = (
         count > BASELINE_MIN_SAMPLES
         and abs(zscore) > ZSCORE_THRESHOLD
-        and gap < 21600  # 6h: longer gaps = lab downtime, not attack
+        and gap < 21600  # 6h: longer gaps = lab downtime, not event of interest
     )
     return is_anomaly, gap, zscore
 
@@ -263,7 +263,8 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
         UUID(event.get("sensor_id")) if event.get("sensor_id") else None,
         site_id, src_asset_id, dst_asset_id,
         event["protocol"], function_code,
-        json.dumps(event.get("payload_summary", {})), event["zeek_uid"],
+        json.dumps(event.get("payload_summary", {})),
+        event.get("zeek_uid") or f"conn-{int(ts.timestamp()*1000)}",
     )
 
     if is_new:

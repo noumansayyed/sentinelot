@@ -8,6 +8,12 @@ echo "=== SentinelOT startup ==="
 # Fix permissions
 sudo chown -R $USER:$USER ~/sentinelot/zeek-lab/real-sensor/logs 2>/dev/null || true
 mkdir -p zeek-lab/real-sensor/logs/zeek zeek-lab/real-sensor/logs/suricata
+  # Clean old Zeek logs so bridge always gets fresh files
+  rm -f ~/sentinelot/zeek-lab/real-sensor/logs/zeek/*.log.old
+  rm -f ~/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log
+  # Clean old Zeek logs so bridge always gets fresh files
+  rm -f ~/sentinelot/zeek-lab/real-sensor/logs/zeek/*.log.old
+  rm -f ~/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log
 
 # Core backend
 docker start sentinelot-postgres-1 sentinelot-redpanda-1 sentinelot-redis-1 sentinelot-keycloak-1 ollama >/dev/null 2>&1 || true
@@ -59,7 +65,7 @@ docker run -d --name zeek-bridge --network sentinelot_default \
 docker start conn-bridge dashboard-react >/dev/null 2>&1 || true
 
 # Lab devices
-for c in hmi-device rogue-device s7-client dnp3-client opcua-client iiot-sensor plc-relay llm-triage; do
+for c in hmi-device s7-client dnp3-client opcua-client iiot-sensor plc-relay llm-triage; do
   docker start $c >/dev/null 2>&1 && echo "  + $c" || echo "  ! $c missing"
 done
 
@@ -73,3 +79,7 @@ echo "READY:"
 echo "  Dashboard: http://localhost:3000"
 echo "  OpenPLC:   http://localhost:8090/dashboard"
 echo "  ATTACK:    docker start rogue-device"
+
+# This line already exists - replace the chown line with this block
+
+# This line already exists - replace the chown line with this block

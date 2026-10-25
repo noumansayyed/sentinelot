@@ -18,7 +18,7 @@ def generate(target_site_id=None):
         if target_site_id:
             site = fetch(conn, "SELECT id, name FROM sites WHERE id = %s", (target_site_id,))
         else:
-            site = fetch(conn, "SELECT id, name FROM sites WHERE name = 'Pune Pilot Plant'")
+            site = fetch(conn, "SELECT id, name FROM sites ORDER BY name LIMIT 1")
         
         if not site:
             site = fetch(conn, "SELECT id, name FROM sites ORDER BY name LIMIT 1")

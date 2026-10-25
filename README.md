@@ -49,12 +49,12 @@ bash setup/new-machine.sh
 
 # 8. Seed database
 docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "
-INSERT INTO tenants (id, name) VALUES ('11111111-1111-1111-1111-111111111111', 'Demo Tenant') ON CONFLICT DO NOTHING;
-INSERT INTO sites (id, tenant_id, name) VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Pune Pilot Plant') ON CONFLICT DO NOTHING;
+INSERT INTO tenants (id, name) VALUES ('11111111-1111-1111-1111-111111111111', 'Primary Tenant') ON CONFLICT DO NOTHING;
+INSERT INTO sites (id, tenant_id, name) VALUES ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Plant-01') ON CONFLICT DO NOTHING;
 INSERT INTO sensors (id, site_id, label, mtls_cert_fingerprint, status) VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'dev-sensor', 'dev-test-fingerprint-000', 'online') ON CONFLICT DO NOTHING;
 "
 
-# 9. Import demo data
+# 9. Import seed data
 docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy assets(id,site_id,mac_address,ip_address,vendor_oui,device_role,protocols,criticality,first_seen,last_seen,baseline_mean_interval,baseline_m2,baseline_count,last_event_at) from stdin csv header" < setup/data/assets.csv
 docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy alerts(id,time,tenant_id,site_id,asset_id,rule_id,severity,description,status,evidence,llm_explanation,acknowledged_by,acknowledged_at) from stdin csv header" < setup/data/alerts.csv
 docker exec -i sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "\copy protocol_events from stdin csv header" < setup/data/protocol_events.csv
@@ -96,7 +96,7 @@ docker run -d --name zeek-bridge --network sentinelot_default \
 | PLC page not loading | `docker restart plc-modbus` then re-upload program |
 
 ## Architecture
-Lab devices (hmi, rogue, s7, dnp3, opcua, iiot)
+Lab devices (hmi, s7, dnp3, opcua, iiot)
 ↓ traffic on sentinelot-net (172.28.240.x)
 real-sensor (Zeek + Suricata on eth1)
 ↓ modbus.log / conn.log
@@ -109,10 +109,10 @@ stream-processor → PostgreSQL/TimescaleDB
 dashboard-react (:3000) + llm-triage (Ollama qwen2.5:1.5b)
 
 
-## Attack Demo
+## Test Device Simulation
 
 ```bash
-docker start rogue-device
+# (rogue device removed)
 ```
 Device 172.28.240.213 appears as UNKNOWN with Unauthorized Write alert.
 EOF
@@ -136,25 +136,25 @@ cat > PROJECT_STATUS.md << 'EOF'
 | Audit log | ✅ |
 | Keycloak authentication | ✅ |
 | Compliance report generation | ✅ |
-| Rogue device demo | ✅ |
-| Off-hours detection demo | ✅ |
+
+| Off-hours detection | ✅ |
 
 ## Known Issues / To Do
 
 | Item | Priority |
 |---|---|
 | Auto role classification (PLC/HMI/RTU) from protocol | Low — manual classification works |
-| SPAN/mirror port live demo on real network | Pending — needs managed switch |
+| SPAN/mirror port on real network | Pending — needs managed switch |
 | Save ollama container in recreate-lab.sh | Medium |
 | Export updated data to setup/data/ CSVs | Medium |
 | Semester 8: validation against public ICS datasets | Pending |
 
-## How to Demo
+## How to run
 
 1. `~/sentinelot/start.sh` → backend `y` → devices `a`
 2. Open http://localhost:3000
 3. Show live devices going ACTIVE on Operations tab
 4. Show Alerts tab — click any alert for LLM playbook
-5. Run attack: `docker start rogue-device`
-6. Show rogue device appearing as UNKNOWN + Unauthorized Write alert
+
+
 7. Acknowledge alert, download Audit CSV
