@@ -310,3 +310,36 @@ async def update_alert_status(
     return {"id": str(alert_id), "status": req.status, "acknowledged_by": req.acknowledged_by}
 from report_api import router as report_api_router
 app.include_router(report_api_router)
+
+
+# Override health/components with correct OLLAMA_URL scope
+@app.get("/health/components", include_in_schema=False)
+async def health_components_v2():
+    from db import get_pool
+    import httpx, os
+    ollama_url = os.environ.get("OLLAMA_URL", "http://ollama:11434")
+    components = {}
+    try:
+        pool = await get_pool()
+        row = await pool.fetchrow("SELECT max(time) as t FROM protocol_events WHERE time > now() - interval '60s'")
+        active = row and row["t"] is not None
+        components["zeek"] = {"state": "active" if active else "idle"}
+        components["zeek_bridge"] = {"state": "active" if active else "idle"}
+        components["conn_bridge"] = {"state": "active" if active else "idle"}
+    except:
+        components["zeek"] = {"state": "offline"}
+        components["zeek_bridge"] = {"state": "offline"}
+        components["conn_bridge"] = {"state": "offline"}
+    try:
+        from confluent_kafka.admin import AdminClient
+        AdminClient({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS}).list_topics(timeout=2)
+        components["kafka"] = {"state": "active"}
+    except:
+        components["kafka"] = {"state": "offline"}
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            r = await client.get(f"{ollama_url}/api/tags")
+            components["llm"] = {"state": "active" if r.status_code == 200 else "offline"}
+    except:
+        components["llm"] = {"state": "offline"}
+    return components

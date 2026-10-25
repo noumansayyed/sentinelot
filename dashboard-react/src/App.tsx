@@ -54,7 +54,7 @@ export default function App() {
 
   useEffect(() => {
     const poll = () => {
-      fetch("http://localhost:8000/healthz")
+      fetch("http://localhost:8000/health/components")
         .then(r => r.json())
         .then(d => setHealth(d))
         .catch(() => setHealth(null));

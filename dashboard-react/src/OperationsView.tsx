@@ -79,7 +79,7 @@ export default function OperationsView({ card }: Props) {
       setErr("");
     } catch(e:any) { setErr(e.message); }
   }
-  useEffect(() => { refresh(); const id = setInterval(refresh, 1000); return () => clearInterval(id); }, []);
+  useEffect(() => { refresh(); const id = setInterval(refresh, 5000); return () => clearInterval(id); }, []);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -125,7 +125,8 @@ export default function OperationsView({ card }: Props) {
 
   const grouped: Record<string, OpDevice[]> = {};
   for (const r of ROLE_ORDER) grouped[r] = [];
-  for (const d of devices) {
+  const sortedDevices = [...devices].sort((a,b) => a.ip.localeCompare(b.ip, undefined, {numeric:true}));
+  for (const d of sortedDevices) {
     const role = ROLE_ORDER.includes(d.role as any) ? d.role : "unknown";
     grouped[role].push(d);
   }
@@ -471,7 +472,7 @@ export default function OperationsView({ card }: Props) {
                           ))}
                         </td>
                         <td className="t-meta" style={{ padding:"14px 8px" }}>
-                          {ago(d.seconds_since_seen)} ago
+                          {d.status === "offline" ? `${ago(d.seconds_since_seen)} ago` : ""}
                         </td>
                         <td style={{ padding:"14px 24px", textAlign:"right" }}>
                           <button onClick={(e)=>{e.stopPropagation(); rowAction(d,"change-role");}} disabled={busy}
