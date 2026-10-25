@@ -14,6 +14,10 @@ if ! docker ps --format '{{.Names}}' | grep -q '^plc-modbus$'; then
   echo "  PLC started fresh - upload program at http://localhost:8090/dashboard"
 else
   echo "  PLC already running - program preserved"
+  # Auto-start PLC program if not running
+  sleep 2
+  PLC_STATUS=$(curl -s -c /tmp/plc_cookie -b /tmp/plc_cookie -d "username=openplc&password=openplc" http://localhost:8090/login -L -s -o /dev/null -w "%{http_code}")
+  curl -s -c /tmp/plc_cookie -b /tmp/plc_cookie http://localhost:8090/start-plc -X POST >/dev/null 2>&1 || true
 fi
 
 mkdir -p zeek-lab/real-sensor/logs/zeek zeek-lab/real-sensor/logs/suricata
