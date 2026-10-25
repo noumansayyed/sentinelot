@@ -54,6 +54,9 @@ CREATE TABLE assets (
     baseline_m2             DOUBLE PRECISION DEFAULT 0,
     baseline_count          INTEGER NOT NULL DEFAULT 0,
     last_event_at           TIMESTAMPTZ,
+    hidden                  BOOLEAN NOT NULL DEFAULT FALSE,
+    hidden_reason           TEXT,
+    role_manual             TEXT,
     UNIQUE (site_id, mac_address)
 );
 
