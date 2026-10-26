@@ -53,6 +53,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure unhandled exceptions still carry CORS headers, otherwise the
+# browser cannot read the 500 response and the frontend sees net::ERR_FAILED
+# with no error detail.
+from fastapi.responses import JSONResponse
+from starlette.requests import Request as _Req
+
+@app.exception_handler(Exception)
+async def _unhandled(request: _Req, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {exc}"},
+        headers={"Access-Control-Allow-Origin": "*",
+                 "Access-Control-Allow-Methods": "*",
+                 "Access-Control-Allow-Headers": "*"},
+    )
+
 KAFKA_BOOTSTRAP_SERVERS = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 KEYCLOAK_ISSUER_URL = os.environ["KEYCLOAK_ISSUER_URL"]
 KEYCLOAK_JWKS_URL = os.environ.get("KEYCLOAK_JWKS_URL", KEYCLOAK_ISSUER_URL)
