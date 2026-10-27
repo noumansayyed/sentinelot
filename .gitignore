@@ -25,3 +25,5 @@ validation/output/
 # Runtime-generated report artifacts
 reports/*.html
 !reports/.gitkeep
+dashboard-react/node_modules/
+*.bak-*

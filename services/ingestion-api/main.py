@@ -328,34 +328,65 @@ from report_api import router as report_api_router
 app.include_router(report_api_router)
 
 
-# Override health/components with correct OLLAMA_URL scope
 @app.get("/health/components", include_in_schema=False)
 async def health_components_v2():
     from db import get_pool
     import httpx, os
     ollama_url = os.environ.get("OLLAMA_URL", "http://ollama:11434")
     components = {}
+
+    # --- Zeek: did real-sensor write to conn.log in the last 60s? ---
+    try:
+        import subprocess, time
+        result = subprocess.run(
+            ["docker", "exec", "real-sensor", "stat", "-c", "%Y", "/logs/zeek/conn.log"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            mtime = int(result.stdout.strip())
+            components["zeek"] = {"state": "active" if (time.time() - mtime) < 60 else "idle"}
+        else:
+            components["zeek"] = {"state": "offline"}
+    except Exception:
+        components["zeek"] = {"state": "offline"}
+
+    # --- conn_bridge: did it forward any event to DB in last 60s? ---
     try:
         pool = await get_pool()
-        row = await pool.fetchrow("SELECT max(time) as t FROM protocol_events WHERE time > now() - interval '60s'")
+        row = await pool.fetchrow(
+            "SELECT max(time) as t FROM protocol_events WHERE time > now() - interval '60s'"
+        )
         active = row and row["t"] is not None
-        components["zeek"] = {"state": "active" if active else "idle"}
-        components["zeek_bridge"] = {"state": "active" if active else "idle"}
         components["conn_bridge"] = {"state": "active" if active else "idle"}
-    except:
-        components["zeek"] = {"state": "offline"}
-        components["zeek_bridge"] = {"state": "offline"}
+    except Exception:
         components["conn_bridge"] = {"state": "offline"}
+
+    # --- zeek_bridge: is the container running? ---
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", "zeek-bridge"],
+            capture_output=True, text=True, timeout=5
+        )
+        running = result.returncode == 0 and result.stdout.strip() == "true"
+        components["zeek_bridge"] = {"state": "active" if running else "offline"}
+    except Exception:
+        components["zeek_bridge"] = {"state": "offline"}
+
+    # --- Kafka: can we list topics? ---
     try:
         from confluent_kafka.admin import AdminClient
-        AdminClient({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS}).list_topics(timeout=2)
+        AdminClient({"bootstrap.servers": os.environ["KAFKA_BOOTSTRAP_SERVERS"]}).list_topics(timeout=2)
         components["kafka"] = {"state": "active"}
-    except:
+    except Exception:
         components["kafka"] = {"state": "offline"}
+
+    # --- LLM: is Ollama responding? ---
     try:
         async with httpx.AsyncClient(timeout=3) as client:
             r = await client.get(f"{ollama_url}/api/tags")
             components["llm"] = {"state": "active" if r.status_code == 200 else "offline"}
-    except:
+    except Exception:
         components["llm"] = {"state": "offline"}
+
     return components

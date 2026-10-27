@@ -23,7 +23,7 @@ PROMPT_TEMPLATE = """Return ONLY a JSON object (no prose, no markdown). You are 
 Alert: severity={severity}; description={description}; device={device_ip} ({device_role}); site={site_name}
 
 JSON schema:
-{{"what": "1 sentence", "why": "2 sentences on OT risk", "actions": [{{"step":"3-5 words","detail":"1 sentence"}}, {{"step":"3-5 words","detail":"1 sentence"}}, {{"step":"3-5 words","detail":"1 sentence"}}], "escalate": "1 sentence on when/who to escalate"}}"""
+{{"what": "1 sentence", "why": "2 sentences on OT risk", "actions": ["action step in one sentence", "action step in one sentence", "action step in one sentence"], "escalate": "1 sentence on when/who to escalate"}}"""
 
 
 def get_conn():

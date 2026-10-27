@@ -66,7 +66,7 @@ async def get_playbook(alert_id: UUID, refresh: bool = False, _: dict = Depends(
             return {
                 "alert_id": str(alert_id),
                 "cached": True,
-                "model": "llm-triage-prose",
+                "model": os.environ.get("LLM_MODEL", "qwen2.5:1.5b"),
                 "generated_at": "now",
                 "what": ctx["llm_explanation"].strip(),
                 "why": "",

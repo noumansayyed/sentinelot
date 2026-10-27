@@ -29,6 +29,8 @@ services:
   redpanda:
     image: redpandadata/redpanda:v24.2.7
     restart: unless-stopped
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
     command:
       - redpanda
       - start
@@ -88,8 +90,10 @@ services:
       context: ./services/stream-processor
     restart: unless-stopped
     depends_on:
-      - redpanda
-      - postgres
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://sentinelot:${POSTGRES_PASSWORD}@postgres:5432/sentinelot
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
@@ -97,3 +101,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  redpandadata:

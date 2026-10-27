@@ -279,3 +279,10 @@ html, body, #root {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* --- status-dot glow for active state --- */
+.status-dot[data-live="true"] {
+  box-shadow:
+    0 0 6px 2px var(--success),
+    0 0 12px 4px color-mix(in srgb, var(--success) 40%, transparent);
+}

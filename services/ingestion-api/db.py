@@ -17,7 +17,18 @@ _pool: Optional[asyncpg.Pool] = None
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        import asyncio, logging
+        _log = logging.getLogger("sentinelot.db")
+        for _attempt in range(30):
+            try:
+                _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+                _log.info("postgres pool ready")
+                break
+            except Exception as _e:
+                _log.warning("postgres not ready (attempt %d/30): %s", _attempt + 1, _e)
+                await asyncio.sleep(3)
+        if _pool is None:
+            raise RuntimeError("Could not connect to Postgres after 30 attempts")
     return _pool
 
 

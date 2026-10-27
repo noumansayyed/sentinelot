@@ -304,7 +304,17 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
 
 
 async def run() -> None:
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    pool = None
+    for _attempt in range(30):
+        try:
+            pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+            logger.info("postgres pool ready")
+            break
+        except Exception as _e:
+            logger.warning("postgres not ready (attempt %d/30): %s", _attempt + 1, _e)
+            await asyncio.sleep(3)
+    if pool is None:
+        raise RuntimeError("Could not connect to Postgres after 30 attempts")
 
     consumer = Consumer({
         "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
