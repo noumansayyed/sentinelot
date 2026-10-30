@@ -6,6 +6,7 @@ import asyncpg, os
 
 router = APIRouter()
 DATABASE_URL = os.environ["DATABASE_URL"]
+from db import write_audit
 
 
 class ActionBody(BaseModel):
@@ -72,6 +73,27 @@ async def take_action(alert_id: UUID, body: ActionBody, _: dict = Depends(lambda
                       (alert_id, alert_time, from_status, to_status, actor, reason)
                     VALUES ($1, $2, $3, $4, $5, $6)
                 """, alert_id, row["time"], row["status"], to_status, body.actor, body.reason)
+
+                # Log to canonical audit trail
+                _alert_row = await conn.fetchrow(
+                    "SELECT tenant_id, site_id FROM alerts WHERE id = $1", alert_id
+                )
+                if _alert_row and _alert_row["tenant_id"]:
+                    await write_audit(
+                        conn,
+                        tenant_id=_alert_row["tenant_id"],
+                        site_id=_alert_row["site_id"],
+                        actor=body.actor,
+                        action=f"alert.{body.action}",
+                        target=str(alert_id),
+                        target_type="alert",
+                        target_id=alert_id,
+                        detail=body.reason,
+                        details={
+                            "from_status": row["status"],
+                            "to_status": to_status,
+                        },
+                    )
 
                 return {"alert_id": str(alert_id),
                         "from": row["status"], "to": to_status, "actor": body.actor}

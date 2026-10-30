@@ -20,9 +20,24 @@ export type AuditEntry = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
-export async function fetchAudit(limit = 200): Promise<AuditEntry[]> {
+export type AuditFilters = {
+  q?: string;
+  actor?: string;
+  action?: string;
+  target_type?: string;
+  target_id?: string;
+  since?: string;
+  until?: string;
+};
+
+export async function fetchAudit(
+  limit = 500,
+  filters: AuditFilters = {}
+): Promise<AuditEntry[]> {
   try {
-    const r = await fetch(`${API_BASE}/v1/audit?limit=${limit}`);
+    const p = new URLSearchParams({ limit: String(limit) });
+    for (const [k, v] of Object.entries(filters)) if (v) p.set(k, String(v));
+    const r = await fetch(`${API_BASE}/v1/audit?${p.toString()}`);
     if (!r.ok) return [];
     return await r.json();
   } catch {

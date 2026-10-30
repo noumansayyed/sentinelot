@@ -162,6 +162,7 @@ import json as _json
 
 
 async def write_audit(
+    conn=None,
     *,
     tenant_id,
     site_id=None,
@@ -174,33 +175,66 @@ async def write_audit(
     detail=None,
     details=None,
 ):
-    """Insert one audit row using its own connection (self-committing)."""
-    pool = await get_pool()
-    await pool.execute(
-        """
+    """Insert one audit row. If `conn` is given, joins its transaction."""
+    sql = """
         INSERT INTO audit_log
           (tenant_id, site_id, user_id, actor, action, target, target_type,
            target_id, detail, details)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        """,
+    """
+    args = (
         tenant_id, site_id, user_id, actor, action, target, target_type,
         target_id, detail,
         _json.dumps(details) if details is not None else None,
     )
+    if conn is not None:
+        await conn.execute(sql, *args)
+    else:
+        pool = await get_pool()
+        await pool.execute(sql, *args)
 
 
-async def list_audit(limit: int = 200):
-    """Return the most recent audit entries, newest first."""
+async def list_audit(
+    limit: int = 200,
+    actor: Optional[str] = None,
+    action: Optional[str] = None,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    """Return audit entries, newest first, with optional filters."""
+    where, params = [], []
+    def add(clause, value):
+        params.append(value)
+        where.append(clause.format(n=len(params)))
+
+    if actor:       add("actor = ${n}", actor)
+    if action:      add("action = ${n}", action)
+    if target_type: add("target_type = ${n}", target_type)
+    if target_id:   add("target_id::text = ${n}", target_id)
+    if since:       add("time >= ${n}::timestamptz", since)
+    if until:       add("time <= ${n}::timestamptz", until)
+    if q:
+        add("(target ILIKE ${n} OR actor ILIKE ${n} OR action ILIKE ${n} OR detail ILIKE ${n})", f"%{q}%")
+        # the same placeholder used four times → rebuild the clause with same index
+        where[-1] = f"(target ILIKE ${len(params)} OR actor ILIKE ${len(params)} OR action ILIKE ${len(params)} OR detail ILIKE ${len(params)})"
+
+    params.append(max(1, min(limit, 1000)))
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
+            f"""
             SELECT id, time, tenant_id, site_id, user_id, actor, action,
                    target, target_type, target_id, detail, details
               FROM audit_log
+              {where_sql}
              ORDER BY id DESC
-             LIMIT $1
+             LIMIT ${len(params)}
             """,
-            max(1, min(limit, 1000)),
+            *params,
         )
     return [dict(r) for r in rows]
