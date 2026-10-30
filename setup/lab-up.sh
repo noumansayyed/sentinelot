@@ -60,10 +60,15 @@ docker run -d --name real-sensor --network container:plc-modbus \
 sleep 15
 
 echo "=== 6. bridges (mount source files — edits picked up on restart, no rebuild) ==="
+# Give real-sensor 25s to create conn.log and modbus.log before bridges open them
+sleep 25
+
 docker rm -f zeek-bridge conn-bridge >/dev/null 2>&1 || true
 docker run -d --name zeek-bridge --network sentinelot_default \
   -v "$HOME/sentinelot/zeek-lab/real-sensor/logs:/logs" \
-  sentinelot-zeek-bridge
+  -v "$HOME/sentinelot/zeek-bridge/bridge.py:/app/bridge.py:ro" \
+  --restart unless-stopped \
+  sentinelot-zeek-bridge python -u /app/bridge.py
 docker run -d --name conn-bridge --network sentinelot_default \
   -v "$HOME/sentinelot/zeek-lab/real-sensor/logs:/logs:ro" \
   -v "$HOME/sentinelot/zeek-bridge/conn_bridge.py:/app/conn_bridge.py:ro" \

@@ -6,7 +6,8 @@ polling, a distinct behavioral pattern from the HMI's slower cadence.
 import time
 from pymodbus.client import ModbusTcpClient
 
-PLC_HOST = "172.28.240.211"
+import os
+PLC_HOST = os.environ.get("PLC_HOST", "plc-modbus")
 
 def main():
     client = ModbusTcpClient(PLC_HOST, port=502)

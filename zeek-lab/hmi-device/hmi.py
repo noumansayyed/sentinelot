@@ -7,7 +7,8 @@ as a genuinely separate device on the network.
 import time
 from pymodbus.client import ModbusTcpClient
 
-PLC_HOST = "172.28.240.211"
+import os
+PLC_HOST = os.environ.get("PLC_HOST", "plc-modbus")
 PLC_PORT = 502
 
 def main():
