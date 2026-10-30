@@ -408,7 +408,7 @@ bash
 docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh update realms/sentinelot -s sslRequired=none
 
 # Then hard-refresh http://localhost:3000 in a private window
-# Login: admin / admin
+# Login: admin / admin — the dashboard expects a clean session; if you see 401 spam in the console, use a Private/Incognito window on http://localhost:3000 and log in fresh
 
 4. modbus.log stays empty
 

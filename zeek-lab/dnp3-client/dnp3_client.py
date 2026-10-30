@@ -10,7 +10,8 @@ from dnp3.master import Master, DefaultSOEHandler
 from dnp3.transport_io import TcpClientChannel
 from dnp3.transport_io.channel import TcpConfig
 
-PLC_HOST = "172.28.240.211"
+import os
+PLC_HOST = os.environ.get("PLC_HOST", "plc-modbus")
 
 async def poll_loop():
     handler = DefaultSOEHandler()

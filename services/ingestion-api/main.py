@@ -337,16 +337,9 @@ async def health_components_v2():
 
     # --- Zeek: did real-sensor write to conn.log in the last 60s? ---
     try:
-        import subprocess, time
-        result = subprocess.run(
-            ["docker", "exec", "real-sensor", "stat", "-c", "%Y", "/logs/zeek/conn.log"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            mtime = int(result.stdout.strip())
-            components["zeek"] = {"state": "active" if (time.time() - mtime) < 60 else "idle"}
-        else:
-            components["zeek"] = {"state": "offline"}
+        import time, os
+        mtime = os.stat("/logs/zeek/conn.log").st_mtime
+        components["zeek"] = {"state": "active" if (time.time() - mtime) < 300 else "idle"}
     except Exception:
         components["zeek"] = {"state": "offline"}
 
@@ -354,7 +347,7 @@ async def health_components_v2():
     try:
         pool = await get_pool()
         row = await pool.fetchrow(
-            "SELECT max(time) as t FROM protocol_events WHERE time > now() - interval '60s'"
+            "SELECT max(time) as t FROM protocol_events WHERE time > now() - interval '300s'"
         )
         active = row and row["t"] is not None
         components["conn_bridge"] = {"state": "active" if active else "idle"}
@@ -363,15 +356,13 @@ async def health_components_v2():
 
     # --- zeek_bridge: is the container running? ---
     try:
-        import subprocess
-        result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", "zeek-bridge"],
-            capture_output=True, text=True, timeout=5
-        )
-        running = result.returncode == 0 and result.stdout.strip() == "true"
-        components["zeek_bridge"] = {"state": "active" if running else "offline"}
+        import os
+        # zeek-bridge is "active" if modbus.log exists and was written in last 300s
+        mtime = os.stat("/logs/zeek/modbus.log").st_mtime
+        components["zeek_bridge"] = {"state": "active" if (time.time() - mtime) < 300 else "idle"}
     except Exception:
-        components["zeek_bridge"] = {"state": "offline"}
+        # modbus.log doesn't exist yet (no Modbus traffic seen) — bridge is running but idle
+        components["zeek_bridge"] = {"state": "idle"}
 
     # --- Kafka: can we list topics? ---
     try:

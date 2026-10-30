@@ -70,6 +70,7 @@ services:
   ingestion-api:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./zeek-lab/real-sensor/logs:/logs:ro
     build:
       context: ./services/ingestion-api
     restart: unless-stopped

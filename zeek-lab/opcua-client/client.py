@@ -2,7 +2,8 @@
 import asyncio
 from asyncua import Client
 
-SERVER_URL = "opc.tcp://172.28.240.211:4840/sentinelot/"
+import os
+SERVER_URL = os.environ.get("OPCUA_URL", "opc.tcp://plc-modbus:4840/sentinelot/")
 
 async def main():
     while True:
