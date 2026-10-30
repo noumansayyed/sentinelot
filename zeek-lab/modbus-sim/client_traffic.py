@@ -2,11 +2,11 @@
 Generates real, periodic Modbus TCP read requests against the simulated
 PLC -- this is the "normal industrial traffic" Zeek will observe.
 """
-import time
+import time, os
 from pymodbus.client import ModbusTcpClient
 
 def main():
-    client = ModbusTcpClient("127.0.0.1", port=5020)
+    client = ModbusTcpClient(os.environ.get("PLC_HOST", "127.0.0.1"), port=int(os.environ.get("PLC_PORT","502")))
     while True:
         if not client.connect():
             print("could not connect, retrying...")

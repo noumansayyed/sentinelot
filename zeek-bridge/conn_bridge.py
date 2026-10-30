@@ -4,10 +4,28 @@ URL="http://sentinelot-ingestion-api-1:8000/v1/ingest/events"
 SENSOR="33333333-3333-3333-3333-333333333333"
 SITE=os.environ.get("SITE_ID", "22222222-2222-2222-2222-222222222222")
 FP="dev-test-fingerprint-000"
-PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua","502":"modbus_tcp"}
-f=open(LOG); f.seek(0,2); print("tailing",LOG,flush=True)
+PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua","502":"modbus_tcp","5020":"modbus_tcp"}
+import os
+def _open():
+    f = open(LOG)
+    f.seek(0, 2)
+    return f, os.stat(LOG).st_ino
+
+f, cur_ino = _open()
+print("tailing", LOG, "inode=", cur_ino, flush=True)
 
 while True:
+    # Detect rotation (real-sensor restart recreates conn.log)
+    try:
+        if os.stat(LOG).st_ino != cur_ino:
+            print("File rotated, reopening...", flush=True)
+            f.close()
+            f, cur_ino = _open()
+            print("tailing", LOG, "inode=", cur_ino, flush=True)
+            continue
+    except FileNotFoundError:
+        time.sleep(1)
+        continue
     line = f.readline()
     if not line:
         time.sleep(1)
