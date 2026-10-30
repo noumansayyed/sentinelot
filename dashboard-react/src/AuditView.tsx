@@ -1,36 +1,27 @@
 import { useEffect, useState } from "react";
-import { getApprovalLog } from "./api";
+import { fetchAudit, type AuditEntry } from "./audit";
 
-interface AuditEntry {
-  ip: string;
-  action: string;
-  by: string;
-  at: string;
-  reason?: string;
-  from?: string;
-  to?: string;
-  target?: string;
-  kind?: string;
-}
 
 export default function AuditView({ card }: { card: React.CSSProperties }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
 
   useEffect(() => {
-    const log = getApprovalLog() as AuditEntry[];
-    // Sort by timestamp descending
-    const sorted = [...log].sort((a, b) =>
-      new Date(b.at).getTime() - new Date(a.at).getTime()
-    );
-    setEntries(sorted);
+    let alive = true;
+    (async () => {
+      const log = await fetchAudit();
+      if (!alive) return;
+      // Backend returns newest first already; keep as-is.
+      setEntries(log);
+    })();
+    return () => { alive = false; };
   }, []);
 
   function downloadCSV() {
     const headers = ["Time", "Actor", "Kind", "Target", "Action", "Reason"];
     const rows = entries.map(e => [
-      e.at,
-      e.by,
-      e.kind || "device",
+      (e.time ?? e.at ?? ""),
+      (e.actor ?? e.by ?? ""),
+      e.kind ?? (e.target_type === "asset" ? "device" : (e.target_type === "alert" ? "alert" : "device")),
       e.target || e.ip || "",
       e.action || "",
       (e.reason || "").replace(/"/g, '""'),
@@ -88,13 +79,13 @@ export default function AuditView({ card }: { card: React.CSSProperties }) {
               <tr key={i} style={{ borderTop: "1px solid var(--hairline-soft)" }}>
                 <td className="t-meta" style={{ padding: "14px 24px" }}>{i + 1}</td>
                 <td className="t-mono" style={{ padding: "14px 8px", color: "var(--text-3)", fontSize: 13 }}>
-                  {new Date(e.at).toLocaleString()}
+                  {new Date((e.time ?? e.at ?? "")).toLocaleString()}
                 </td>
                 <td style={{ padding: "14px 8px", color: "var(--text-1)", fontWeight: 500 }}>
-                  {e.by}
+                  {(e.actor ?? e.by ?? "")}
                 </td>
                 <td style={{ padding: "14px 8px", color: "var(--text-2)" }}>
-                  {e.kind || "device"}
+                  {e.kind ?? (e.target_type === "asset" ? "device" : (e.target_type === "alert" ? "alert" : "device"))}
                 </td>
                 <td className="t-mono" style={{ padding: "14px 8px", color: "var(--text-1)" }}>
                   {e.target || e.ip || "—"}

@@ -7,6 +7,9 @@ import asyncpg, os
 
 router = APIRouter()
 DATABASE_URL = os.environ["DATABASE_URL"]
+import os as _os
+_TENANT = _os.environ.get("DEMO_TENANT_ID", "11111111-1111-1111-1111-111111111111")
+from db import write_audit
 
 VALID_ROLES = ("plc","hmi","rtu","sensor","engineering_workstation","switch","unknown")
 VALID_CRIT  = ("critical","high","medium","low","unclassified")
@@ -82,7 +85,26 @@ async def classify_asset(asset_id: UUID, body: ClassifyBody, _: dict = Depends(l
                      cur["hidden"], body.hidden if body.hidden is not None else cur["hidden"],
                      body.reason)
 
-                return {"asset_id": str(asset_id), "updated": True}
+                # canonical audit trail (same transaction)
+        await write_audit(
+            tenant_id=_TENANT,
+            site_id=cur["site_id"],
+            actor=body.actor,
+            action=f"asset.{action}",
+            target=str(asset_id),
+            target_type="asset",
+            target_id=asset_id,
+            detail=body.reason,
+            details={
+                "old_role": cur["device_role"],
+                "new_role": body.role or cur["device_role"],
+                "old_hidden": cur["hidden"],
+                "new_hidden": body.hidden if body.hidden is not None else cur["hidden"],
+                "criticality": body.criticality,
+            },
+        )
+
+        return {"asset_id": str(asset_id), "updated": True}
     finally:
         await pool.close()
 
@@ -133,7 +155,23 @@ async def bulk_classify(body: BulkClassifyBody, _: dict = Depends(lambda: None))
                          cur["device_role"], body.role or cur["device_role"],
                          cur["hidden"], body.hidden if body.hidden is not None else cur["hidden"],
                          body.reason)
-                    updated += 1
+                        # canonical audit trail (same transaction)
+            await write_audit(
+                tenant_id=_TENANT,
+                site_id=cur["site_id"],
+                actor=body.actor,
+                action="asset.bulk_classify",
+                target=str(aid),
+                target_type="asset",
+                target_id=aid,
+                detail=body.reason,
+                details={
+                    "role": body.role,
+                    "criticality": body.criticality,
+                    "hidden": body.hidden,
+                },
+            )
+        updated += 1
         return {"updated": updated, "requested": len(body.asset_ids)}
     finally:
         await pool.close()

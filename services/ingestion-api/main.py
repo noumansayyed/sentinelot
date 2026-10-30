@@ -312,18 +312,53 @@ async def ingest_signature_alerts(
 class UpdateAlertStatusRequest(BaseModel):
     status: Literal["open", "acknowledged", "resolved", "false_positive"]
     acknowledged_by: str = "operator"
+    reason: Optional[str] = None
 
 
 @app.patch("/v1/alerts/{alert_id}")
 async def update_alert_status(
     alert_id: UUID, req: UpdateAlertStatusRequest, _: dict = Depends(verify_user_jwt)
 ):
-    from db import update_alert_status as db_update_alert_status
+    from db import get_pool, update_alert_status as db_update_alert_status, write_audit
+
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        """SELECT tenant_id, site_id, status AS old_status, severity, description
+             FROM alerts WHERE id = $1""",
+        alert_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="alert not found")
 
     updated = await db_update_alert_status(str(alert_id), req.status, req.acknowledged_by)
     if not updated:
         raise HTTPException(status_code=404, detail="alert not found")
+
+    await write_audit(
+        tenant_id=row["tenant_id"],
+        site_id=row["site_id"],
+        actor=req.acknowledged_by,
+        action=f"alert.{req.status}",
+        target=str(alert_id),
+        target_type="alert",
+        target_id=alert_id,
+        detail=req.reason,
+        details={
+            "old_status": row["old_status"],
+            "new_status": req.status,
+            "severity": row["severity"],
+            "description": (row["description"] or "")[:200],
+        },
+    )
+
     return {"id": str(alert_id), "status": req.status, "acknowledged_by": req.acknowledged_by}
+
+
+@app.get("/v1/audit")
+async def list_audit_route(limit: int = 200):
+    """Read the canonical audit trail, newest first."""
+    from db import list_audit
+    return await list_audit(limit=limit)
 from report_api import router as report_api_router
 app.include_router(report_api_router)
 

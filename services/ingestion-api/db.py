@@ -138,14 +138,69 @@ async def insert_signature_alert(
     )
 
 
-async def update_alert_status(alert_id: str, new_status: str, acknowledged_by: str = "operator") -> bool:
-    pool = await get_pool()
-    result = await pool.execute(
-        """UPDATE alerts
-           SET status = $1,
-               acknowledged_by = CASE WHEN $1 != 'open' THEN $3 ELSE acknowledged_by END,
-               acknowledged_at = CASE WHEN $1 != 'open' THEN NOW() ELSE acknowledged_at END
-           WHERE id = $2""",
-        new_status, alert_id, acknowledged_by
-    )
+async def update_alert_status(alert_id: str, new_status: str, acknowledged_by: str = "operator",
+                               conn=None) -> bool:
+    """Update alert status. If `conn` is provided, runs in the caller's transaction
+    (so an audit row can be committed atomically alongside). Otherwise uses the pool."""
+    sql = """UPDATE alerts
+               SET status = $1,
+                   acknowledged_by = CASE WHEN $1 != 'open' THEN $3 ELSE acknowledged_by END,
+                   acknowledged_at = CASE WHEN $1 != 'open' THEN NOW() ELSE acknowledged_at END
+               WHERE id = $2"""
+    if conn is not None:
+        result = await conn.execute(sql, new_status, alert_id, acknowledged_by)
+    else:
+        pool = await get_pool()
+        result = await pool.execute(sql, new_status, alert_id, acknowledged_by)
     return result != "UPDATE 0"
+
+
+# ---------------------------------------------------------------------------
+# Audit trail — canonical writer and reader for the audit_log table.
+# ---------------------------------------------------------------------------
+import json as _json
+
+
+async def write_audit(
+    *,
+    tenant_id,
+    site_id=None,
+    actor=None,
+    user_id=None,
+    action,
+    target=None,
+    target_type=None,
+    target_id=None,
+    detail=None,
+    details=None,
+):
+    """Insert one audit row using its own connection (self-committing)."""
+    pool = await get_pool()
+    await pool.execute(
+        """
+        INSERT INTO audit_log
+          (tenant_id, site_id, user_id, actor, action, target, target_type,
+           target_id, detail, details)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        """,
+        tenant_id, site_id, user_id, actor, action, target, target_type,
+        target_id, detail,
+        _json.dumps(details) if details is not None else None,
+    )
+
+
+async def list_audit(limit: int = 200):
+    """Return the most recent audit entries, newest first."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, time, tenant_id, site_id, user_id, actor, action,
+                   target, target_type, target_id, detail, details
+              FROM audit_log
+             ORDER BY id DESC
+             LIMIT $1
+            """,
+            max(1, min(limit, 1000)),
+        )
+    return [dict(r) for r in rows]

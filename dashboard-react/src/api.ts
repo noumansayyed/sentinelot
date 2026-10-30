@@ -44,12 +44,13 @@ export async function fetchAssets(): Promise<Asset[]> {
 export async function acknowledgeAlert(
   id: string,
   status: "acknowledged" | "resolved" | "false_positive",
-  acknowledged_by: string = "operator"
+  acknowledged_by: string = "operator",
+  reason?: string,
 ) {
   await authed(`${API_BASE}/v1/alerts/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status, acknowledged_by }),
+    body: JSON.stringify({ status, acknowledged_by, reason }),
   });
 }
 
