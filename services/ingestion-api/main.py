@@ -355,10 +355,22 @@ async def update_alert_status(
 
 
 @app.get("/v1/audit")
-async def list_audit_route(limit: int = 200):
-    """Read the canonical audit trail, newest first."""
+async def list_audit_route(
+    limit: int = 200,
+    actor: Optional[str] = None,
+    action: Optional[str] = None,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    """Read the canonical audit trail, newest first, with filters."""
     from db import list_audit
-    return await list_audit(limit=limit)
+    return await list_audit(
+        limit=limit, actor=actor, action=action, target_type=target_type,
+        target_id=target_id, since=since, until=until, q=q,
+    )
 from report_api import router as report_api_router
 app.include_router(report_api_router)
 
