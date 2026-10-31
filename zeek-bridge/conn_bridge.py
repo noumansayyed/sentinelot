@@ -8,7 +8,8 @@ PORTS={"102":"s7comm","20000":"dnp3","4840":"opcua","502":"modbus_tcp","5020":"m
 import os
 def _open():
     f = open(LOG)
-    f.seek(0, 2)
+    current_inode = os.fstat(f.fileno()).st_ino
+        f.seek(0, 2)
     return f, os.stat(LOG).st_ino
 
 f, cur_ino = _open()
