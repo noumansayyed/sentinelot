@@ -43,6 +43,7 @@ export default function OperationsView({ card }: Props) {
   const [inbox, setInbox]         = useState<InboxAsset[]>([]);
   const [err, setErr]             = useState("");
   const [last, setLast]           = useState("");
+  const [, setTick]               = useState(0);
   const [filter, setFilter]       = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected]   = useState<Set<string>>(new Set());
@@ -60,6 +61,18 @@ export default function OperationsView({ card }: Props) {
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+    // Keep the "Passive monitoring · HH:MM:SS" timestamp live by forcing
+  // a re-render every second, independent of data refresh.
+  useEffect(() => {
+    const tick = () => {
+      setTick(t => t + 1);
+      setLast(new Date().toLocaleTimeString());
+    };
+    tick();  // set immediately so we don't wait 1s for first value
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -76,7 +89,7 @@ export default function OperationsView({ card }: Props) {
       const sid = getSiteId();
       const [o, ib] = await Promise.all([fetchOperations(sid), fetchAssetInbox(sid)]);
       setOps(o); setInbox(ib);
-      setLast(new Date().toLocaleTimeString());
+
       setErr("");
     } catch(e:any) { setErr(e.message); }
   }
