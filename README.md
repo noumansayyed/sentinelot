@@ -1,444 +1,313 @@
-SentinelOT
+# SentinelOT
 
-Passive OT/IIoT asset-visibility and threat-detection platform. Runs on a single laptop with Docker. The sensor passively inspects a copy of industrial network traffic (via SPAN/mirror port in production, or a local Docker lab for development) and detects anomalous activity on Modbus TCP, DNP3, S7comm, and OPC UA.
+Passive OT/IIoT visibility and threat detection. Runs on one laptop with Docker.
 
-Dashboard: http://localhost:3000
-OpenPLC (simulated PLC): http://localhost:8090/dashboard
-Keycloak (auth): http://localhost:8080
-Ingestion API: http://localhost:8000
-Architecture (the pipeline, one line per hop)
-text
-┌───────────────────────────────────────────────────────┐
-│ real-sensor (Zeek + Suricata + ICSNPP)                 │
-│ sniffs eth0 (bridge) or a physical NIC (SPAN)          │
-│ writes /logs/zeek/{conn,modbus,s7comm,dnp3,opcua}       │
-└──────────────────────┬────────────────────────────────┘
-                       │
-          ┌────────────┴────────────────┐
-          │                             │
- conn-bridge (conn.log)       zeek-bridge (modbus.log)
- parses TCP connections       parses Modbus PDUs
-          │                             │
-          └────────────┬────────────────┘
-                       │ POST /v1/ingest/events
-                       ▼
-          sentinelot-ingestion-api-1
-          (auth via X-Client-Cert-Fingerprint)
-                       │
-                       │ Kafka topic: protocol-events
-                       ▼
-          sentinelot-redpanda-1
-                       │
-                       │ consume
-                       ▼
-          sentinelot-stream-processor-1
-          (rule-based detection + anomaly baseline)
-                       │
-                       │ INSERT
-                       ▼
-          sentinelot-postgres-1 (TimescaleDB)
-                       │
-                       ▼
-          dashboard-react (http://localhost:3000)
+Sniffs a copy of industrial network traffic (SPAN/mirror port in production, or a
+local Docker lab) and detects anomalous activity on **Modbus TCP, DNP3, S7comm,
+and OPC UA**.
 
+---
 
-llm-triage polls alerts and writes plain-language playbooks via ollama (qwen2.5:1.5b).
+## Endpoints
 
-First-time setup (new machine, from zero)
-1. Prerequisites
-bash
-# Install Git, curl, and Docker + Compose plugin (Ubuntu 22.04/24.04)
-sudo apt update && sudo apt install -y git curl openssl
+| Service | URL | Credentials |
+|---|---|---|
+| Dashboard | http://localhost:3000 | Keycloak user (see below) |
+| OpenPLC (simulated PLC) | http://localhost:8090/dashboard | `openplc` / `openplc` |
+| Keycloak (auth) | http://localhost:8080 | admin password in `.env` |
+| Ingestion API | http://localhost:8000 | — |
 
-# Docker: see https://docs.docker.com/engine/install/ubuntu/
+---
 
-# Then: sudo usermod -aG docker "$USER"  (log out / back in)
+## 30-Second Start (fresh machine)
 
-2. Clone and configure secrets
-bash
+```bash
 git clone https://github.com/noumansayyed/sentinelot.git ~/sentinelot
 cd ~/sentinelot
-
 cp .env.example .env
 
-# Fill the four secrets — this step is required (compose refuses to start without them)
+# Fill the four required secrets (compose refuses to start without them)
 gen() { openssl rand -hex 24; }
-
 sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(gen)|" .env
 sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$(gen)|" .env
 sed -i "s|^KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=$(gen)|" .env
 sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$(gen)|" .env
-
 cat .env   # save these values somewhere safe
 
-3. Build and start the core stack
-bash
+# Bring the whole stack up
+bash setup/restart.sh
+```
+
+Then: open http://localhost:8090/dashboard → login `openplc`/`openplc` → if the PLC status is **Stopped**, click **Start PLC**.
+
+That is the *only* manual step. Everything else is automated.
+
+---
+
+## Daily Operations
+
+**Full start / restart** (safe to run any time, any number of times):
+
+```bash
 cd ~/sentinelot
-docker compose up -d --build
+bash setup/restart.sh
+```
 
+**Just bring the lab up** (leaves the core stack running):
 
-Wait ~60 seconds, then confirm:
-
-bash
-docker compose ps
-
-# Expect: postgres (healthy), redis, redpanda, keycloak,
-# ingestion-api, stream-processor all Up
-
-4. One-time database seed
-bash
-docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "
-INSERT INTO tenants (id, name)
-VALUES ('11111111-1111-1111-1111-111111111111', 'Primary Tenant')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO sites (id, tenant_id, name)
-VALUES ('22222222-2222-2222-2222-222222222222',
-'11111111-1111-1111-1111-111111111111', 'Plant-01')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO sensors (id, site_id, label, mtls_cert_fingerprint, status)
-VALUES ('33333333-3333-3333-3333-333333333333',
-'22222222-2222-2222-2222-222222222222',
-'dev-sensor', 'dev-test-fingerprint-000', 'online')
-ON CONFLICT DO NOTHING;
-"
-
-5. Kafka topic + Keycloak realm (one-time)
-
-Kafka topic
-
-bash
-docker exec sentinelot-redpanda-1 rpk topic create protocol-events --brokers redpanda:9092 || true
-
-docker exec sentinelot-redpanda-1 rpk topic list --brokers redpanda:9092
-
-
-Keycloak realm
-
-bash
-KCPW=$(grep ^KEYCLOAK_ADMIN_PASSWORD ~/sentinelot/.env | cut -d= -f2)
-
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080 --realm master --user admin --password "$KCPW"
-
-docker cp ~/sentinelot/setup/keycloak-realm.json sentinelot-keycloak-1:/tmp/realm.json
-
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json || true
-
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh create users -r sentinelot \
-  -s username=admin -s email=admin@sentinelot.local -s enabled=true -s emailVerified=true || true
-
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh set-password -r sentinelot \
-  --username admin --new-password admin
-
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh update realms/sentinelot -s sslRequired=none
-
-6. Dashboard, Ollama, LLM triage
-
-Dashboard
-
-bash
-docker build -t sentinelot-dashboard-react ~/sentinelot/dashboard-react
-
-docker run -d --name dashboard-react --network sentinelot_default \
-  -p 3000:80 \
-  -v ~/sentinelot/dashboard-react/dist:/usr/share/nginx/html:ro \
-  sentinelot-dashboard-react
-
-
-Ollama + model
-
-bash
-docker run -d --name ollama --network sentinelot_default -p 11434:11434 \
-  -v ollama-models:/root/.ollama ollama/ollama
-
-sleep 5
-
-docker exec ollama ollama pull qwen2.5:1.5b
-
-
-LLM triage
-
-bash
-docker build -t sentinelot-llm-triage ~/sentinelot/services/llm-triage
-
-PG_PW=$(grep ^POSTGRES_PASSWORD ~/sentinelot/.env | cut -d= -f2)
-
-docker run -d --name llm-triage --network sentinelot_default \
-  -e DATABASE_URL="postgresql://sentinelot:${PG_PW}@sentinelot-postgres-1:5432/sentinelot" \
-  -e OLLAMA_URL="http://ollama:11434" \
-  -e OLLAMA_MODEL="qwen2.5:1.5b" \
-  sentinelot-llm-triage
-
-7. Build the lab images (one-time, ~5 minutes)
-bash
+```bash
 cd ~/sentinelot
-
-for d in zeek-lab/*/; do
-  name="sentinelot-$(basename "$d")"
-  [ -f "$d/Dockerfile" ] && docker build -t "$name" "$d" 2>&1 | tail -2
-done
-
-docker build -t sentinelot-zeek-bridge zeek-bridge
-
-docker build -t sentinelot-dashboard-react dashboard-react
-
-8. Start the lab (one command)
-bash
 bash setup/lab-up.sh
+```
 
+**Check the whole stack in 5 seconds:**
 
-That script creates plc-modbus, modbus-sim + modbus-sim-client, s7-plc, opcua-server, real-sensor, zeek-bridge, conn-bridge, llm-triage — all on sentinelot_default, no macvlan, and inserts the sensor row if missing.
+```bash
+cd ~/sentinelot
 
-Start the stack (after setup, container-by-container)
+bash setup/verify.sh 2>/dev/null || {
+  echo "=== containers ==="; docker ps --format '{{.Names}}\t{{.Status}}' | sort
+  echo "=== health ==="; curl -s http://localhost:8000/health/components | python3 -m json.tool
+  echo "=== protocol events (last 2 min) ==="
+  docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c \
+    "SELECT protocol, count(*) FROM protocol_events WHERE time > now() - interval '2 minutes' GROUP BY 1 ORDER BY 2 DESC;"
+}
+```
 
-Every command below is docker start. No up. No recreation. Container names are exactly what docker ps -a shows.
+**Logs** — one command per service:
 
-Step 1 — Postgres first
-bash
-docker start sentinelot-postgres-1
-sleep 5
-docker logs sentinelot-postgres-1 --tail 6
+```bash
+docker logs -f zeek-bridge       # Modbus flow
+docker logs -f conn-bridge       # TCP connections (S7, DNP3, OPC-UA)
+docker logs -f real-sensor       # Zeek engine
+docker logs -f sentinelot-stream-processor-1    # detection rules
+docker logs -f sentinelot-ingestion-api-1       # API requests
+docker logs -f llm-triage        # LLM playbooks
+```
 
-# Expect: "database system is ready to accept connections"
+**Stop everything cleanly:**
 
-Step 2 — Kafka, Redis, Keycloak
-bash
-docker start sentinelot-redpanda-1
-docker start sentinelot-redis-1
-docker start sentinelot-keycloak-1
+```bash
+cd ~/sentinelot
 
-Step 3 — Backend services
-bash
-docker start sentinelot-ingestion-api-1
-docker start sentinelot-stream-processor-1
+docker stop plc-modbus modbus-sim-client s7-plc opcua-server \
+             s7-client opcua-client dnp3-client hmi-device iiot-sensor \
+             real-sensor zeek-bridge conn-bridge llm-triage dashboard-react \
+             sentinelot-stream-processor-1 sentinelot-ingestion-api-1 \
+             sentinelot-keycloak-1 sentinelot-redis-1 sentinelot-redpanda-1 \
+             sentinelot-postgres-1 ollama 2>/dev/null || true
+```
 
-Step 4 — Ollama + LLM triage
-bash
-docker start ollama
-sleep 3
-docker start llm-triage
+**Start everything back via lab-up.sh:**
 
-Step 5 — Dashboard
-bash
-docker start dashboard-react
+```bash
+cd ~/sentinelot
+bash setup/lab-up.sh
+```
 
-Step 6 — PLC
-bash
-docker start plc-modbus
-sleep 8
+---
 
-Step 7 — Lab containers sharing PLC's netns
-bash
-docker start s7-plc
-docker start opcua-server
-docker start real-sensor
+## The 5-Second Health Check
 
-sleep 15   # give Zeek time to open its logs
+Any time you suspect something is broken, these four lines tell you where:
 
-Step 8 — Industrial clients
-bash
-docker start s7-client
-docker start opcua-client
-docker start dnp3-client
-docker start hmi-device
-docker start iiot-sensor
+```bash
+# 1. Are all containers up?
+docker ps --format '{{.Names}}\t{{.Status}}' | sort
 
-Step 9 — Modbus simulator + its client
-bash
-docker start modbus-sim
-docker start modbus-sim-client
+# 2. Is the API happy?
+curl -s http://localhost:8000/health/components | python3 -m json.tool
 
-Step 10 — Bridges (last, so log files exist first)
-bash
-docker start conn-bridge
-docker start zeek-bridge
-
-Step 11 — Verify
-bash
-docker ps --format 'table {{.Names}}\t{{.Status}}' | sort
-
-
-You should see: sentinelot-postgres-1 (healthy), sentinelot-redis-1, sentinelot-redpanda-1, sentinelot-keycloak-1, sentinelot-ingestion-api-1, sentinelot-stream-processor-1, dashboard-react, ollama, llm-triage, plc-modbus, s7-plc, opcua-server, real-sensor, s7-client, opcua-client, dnp3-client, hmi-device, iiot-sensor, modbus-sim, modbus-sim-client, zeek-bridge, conn-bridge.
-
-Then:
-
-bash
+# 3. Are all 4 protocols flowing?
 docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c \
-  "SELECT protocol, count(*) FROM protocol_events WHERE time > now() - interval '2 minutes' GROUP BY 1 ORDER BY 2 DESC;"
+  "SELECT protocol, count(*) FROM protocol_events WHERE time > now() - interval '2 minutes' GROUP BY 1;"
 
+# 4. Is the dashboard serving?
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000
+```
 
-Expect non-zero counts for s7comm, opcua, and possibly dnp3 / modbus_tcp.
+Healthy = all containers `Up`, all 4 protocols non-zero, `200` from dashboard.
 
-Step 12 — Start the PLC program (in the browser)
+---
 
-The PLC runtime must be started manually in the browser — this is the only step that can't be automated because the current OpenPLC build exposes no start endpoint:
+## Architecture
 
-Open http://localhost:8090/dashboard
-Log in: openplc / openplc
-Click Start PLC
+```text
+                  ┌──────────────────────────────────────────────────┐
+                  │ real-sensor (Zeek + Suricata + ICSNPP)           │
+                  │   sniffs eth0 (lab) or SPAN port (production)    │
+                  │   writes /logs/zeek/{conn,modbus,s7comm,...}     │
+                  └────────────────────┬─────────────────────────────┘
+                                       │
+                   ┌───────────────────┴────────────────────┐
+                   │                                        │
+           conn-bridge (conn.log)               zeek-bridge (modbus.log)
+           TCP connection events                Modbus PDU events
+                   │                                        │
+                   └───────────────────┬────────────────────┘
+                                       │ POST /v1/ingest/events
+                                       ▼
+                          sentinelot-ingestion-api-1
+                          (auth: X-Client-Cert-Fingerprint)
+                                       │
+                                       ▼
+                              sentinelot-redpanda-1
+                              (Kafka topic: protocol-events)
+                                       │
+                                       ▼
+                        sentinelot-stream-processor-1
+                        (detection rules + asset classifier)
+                                       │
+                                       ▼
+                          sentinelot-postgres-1 (TimescaleDB)
+                                       │
+                                       ▼
+                          dashboard-react (nginx :3000)
+```
 
-The runtime log should show Issued start_modbus() command to start on port: 502.
+The `llm-triage` service polls alerts and writes plain-language playbooks via Ollama (`qwen2.5:1.5b`).
 
-Stop (container-by-container, reverse order)
-bash
-# 1. Bridges first (so they finish flushing)
-docker stop conn-bridge
-docker stop zeek-bridge
+---
 
-# 2. Clients and simulators
-docker stop modbus-sim-client
-docker stop modbus-sim
-docker stop s7-client
-docker stop opcua-client
-docker stop dnp3-client
-docker stop hmi-device
-docker stop iiot-sensor
+## What's in the Lab
 
-# 3. Sensor (writes to logs)
-docker stop real-sensor
-docker stop s7-plc
-docker stop opcua-server
+Started by `setup/lab-up.sh`:
 
-# 4. PLC
-docker stop plc-modbus
+| Container | Role |
+|---|---|
+| `plc-modbus` | OpenPLC simulating a Modbus/S7/DNP3/OPC-UA PLC (stateful — program preserved across restarts) |
+| `s7-plc` | Shares `plc-modbus` network namespace, runs S7comm on :102 |
+| `opcua-server` | Shares `plc-modbus` network namespace, runs OPC-UA on :4840 |
+| `modbus-sim-client` | Polls `plc-modbus` on :502 every 2s — the Modbus traffic source |
+| `s7-client` | Polls `plc-modbus` on :102 |
+| `dnp3-client` | Polls `plc-modbus` on :20000 |
+| `opcua-client` | Polls `plc-modbus` on :4840 |
+| `hmi-device` | Reads Modbus holding registers (HMI-like traffic) |
+| `iiot-sensor` | Reads sensor data via Modbus |
+| `real-sensor` | Zeek inspecting `plc-modbus`'s network namespace |
+| `zeek-bridge` | Parses `modbus.log`, POSTs to API |
+| `conn-bridge` | Parses `conn.log`, POSTs to API |
+| `dashboard-react` | nginx serving the built frontend |
 
-# 5. Dashboard + LLM
-docker stop dashboard-react
-docker stop llm-triage
-docker stop ollama
+Every lab container runs with `--restart unless-stopped` and survives machine reboots.
 
-# 6. Backend
-docker stop sentinelot-stream-processor-1
-docker stop sentinelot-ingestion-api-1
+### The one manual step
 
-# 7. Data layer (last)
-docker stop sentinelot-keycloak-1
-docker stop sentinelot-redis-1
-docker stop sentinelot-redpanda-1
-docker stop sentinelot-postgres-1
+OpenPLC's runtime has a physical "start" button in its UI. After every `plc-modbus` start, open http://localhost:8090/dashboard, log in with `openplc`/`openplc`, and click **Start PLC** if the status shows "Stopped."
 
+This is a design choice of OpenPLC, not something the automation can fix. Everything else — the bridges, the clients, the sensor, the dashboards — is fully automatic.
 
-Data persists in named volumes (sentinelot_pgdata, sentinelot_redpandadata, ollama-models). Stopping is safe; starting again resumes where you left off.
+---
 
-SPAN / mirror-port deployment (production)
+## Data Flow (developers)
 
-For a live demo on a real network — campus lab, partner facility, or industrial plant — the sensor connects to one port on a managed switch, configured as a SPAN/mirror destination. That port receives a copy of all traffic on the production VLAN, without being inserted into the data path.
+1. `real-sensor` (Zeek) captures packets and writes log files to `~/sentinelot/zeek-lab/real-sensor/logs/zeek/`.
+2. `conn-bridge` and `zeek-bridge` tail those files. Each batch is 50 events POSTed to `/v1/ingest/events`. If the API is slow, the bridge backs off and retries — it never drops events.
+3. `sentinelot-ingestion-api-1` validates the sensor's cert fingerprint and pushes to Kafka topic `protocol-events`.
+4. `sentinelot-stream-processor-1` consumes Kafka, resolves `src_ip`/`dst_ip` to asset UUIDs (upserting new assets on the fly), inserts into `protocol_events`, runs detection rules, and classifies assets by observed protocol pattern.
+5. `sentinelot-postgres-1` (TimescaleDB) stores events as a hypertable on `time`.
+6. `dashboard-react` reads from `sentinelot-ingestion-api-1`.
 
-The sensor itself does not change. Only its run command:
+### Key tables
 
-bash
-# On the production host:
-docker run -d --name real-sensor \
-  --network host \
-  --cap-add=NET_ADMIN --cap-add=NET_RAW \
-  -e IFACE=<physical-NIC-receiving-the-mirror> \
-  -v /var/lib/sentinelot/logs:/logs \
-  sentinelot-real-sensor
+| Table | Written by | What |
+|---|---|---|
+| `assets` | stream-processor | One row per distinct IP/MAC. Fields: `ip_address`, `mac_address`, `device_role`, `protocols`, `first_seen`, `last_seen` |
+| `protocol_events` | stream-processor | One row per protocol event. Fields: `time`, `sensor_id`, `site_id`, `src_asset_id`, `dst_asset_id`, `protocol`, `function_code`, `payload_summary`, `zeek_uid` |
+| `alerts` | stream-processor | Detection-rule output |
+| `alerts_status_log` | ingestion-api | Alert state transitions |
+| `audit_log` | triggers + endpoints | Every INSERT/UPDATE/DELETE on `assets`/`alerts`/`sites`/`compliance_reports` |
 
-# Find the NIC name on the host:
-ip -br link
+### Configuration
 
-# Then set IFACE= to whatever port the SPAN traffic lands on
-# (e.g. enp3s0, eth1).
+`.env` (4 required keys):
 
+```env
+POSTGRES_PASSWORD=...
+REDIS_PASSWORD=...
+KEYCLOAK_ADMIN_PASSWORD=...
+MINIO_ROOT_PASSWORD=...
+```
 
-run.sh inside the sensor reads IFACE and passes it to both Suricata and Zeek. If the mirror is delivered on a VLAN-tagged trunk, Suricata and Zeek need vlan filters — add -e IFACE=enp3s0 and inside the container the run script can be extended with -e BPF_FILTER='vlan' when needed.
+Optional: `MINIO_ROOT_USER`. See `.env.example`.
 
-Do not use macvlan for the sensor in production. macvlan deliberately hides peer traffic from the host, which is the opposite of what a SPAN port needs. Use --network host so Zeek sees the real NIC, or --network macvlan only if you've explicitly verified the switch forwards mirrors across the macvlan parent interface.
+---
 
-What a SPAN port gives you that the Docker lab does not
-Actual switch-mirrored traffic from real PLCs, HMIs, RTUs, IIoT sensors.
-Protocol coverage: 502/tcp (Modbus), 20000/tcp+udp (DNP3), 102/tcp (S7comm), 4840/tcp (OPC UA), 44818/tcp (EtherNet/IP), 47808/udp (BACnet).
-Real device-to-device connections.
+## Repo Layout
 
-What stays the same: everything downstream of real-sensor — conn-bridge, ingestion-api, Kafka, stream-processor, postgres, dashboard-react. The software is SPAN-compatible because conn-bridge reads conn.log (TCP metadata) which Zeek generates on any interface, and zeek-bridge reads modbus.log (protocol PDUs) which ICSNPP generates on any interface. The lab and production differ only in what interface real-sensor sniffs.
+| Path | Purpose |
+|---|---|
+| `docker-compose.yml` | Core stack: postgres, redis, redpanda, keycloak, ingestion-api, stream-processor |
+| `setup/lab-up.sh` | Idempotent full-lab bring-up (core stack + lab). Safe to re-run |
+| `setup/restart.sh` | Full stop (`docker compose down` + stop lab) then start via `lab-up.sh` |
+| `setup/verify.sh` | One-command health check |
+| `setup/audit_triggers.sql` | DB triggers that auto-log every mutation to `audit_log` |
+| `services/ingestion-api/` | FastAPI ingestion + REST API |
+| `services/stream-processor/` | Kafka consumer, detection rules, asset upsert |
+| `dashboard-react/` | React frontend, served as static files by nginx |
+| `zeek-bridge/` | `bridge.py` (modbus.log), `conn_bridge.py` (conn.log) |
+| `zeek-lab/real-sensor/` | Zeek + Suricata Dockerfile |
+| `zeek-lab/{s7-plc,opcua-server,...}/` | One dir per lab device |
+| `schema.sql` | Postgres schema (loaded on first DB start) |
 
-Reconciling with the SoP: the current lab (sentinelot_default bridge) is functionally equivalent to a SPAN port — all lab devices exchange traffic on one segment, and real-sensor sniffs that segment. The macvlan that was previously used violated this equivalence (Zeek couldn't see peer traffic). It has been removed.
+---
 
-Troubleshooting (the three real pitfalls)
-1. protocol_events is always empty despite Zeek writing conn.log
+## Troubleshooting
 
-Two causes, both fixed by the current setup:
+**"Modbus TCP: 0 devices active"**
 
-conn.log was in JSON, not TSV.
+1. `docker logs zeek-bridge --tail 20` — should show `forwarded batch of N`.
+2. `tail -5 ~/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log` — should be non-empty and recent.
+3. `docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c "SELECT max(time) FROM protocol_events WHERE protocol='modbus_tcp';"` — should be within the last minute.
+4. If bridge is stuck, `docker restart zeek-bridge`. If it stays stuck, check `/logs/zeek/modbus.log` mtime vs. `now`.
 
-local.zeek had redef LogAscii::use_json = T;. The bridges in this repo parse TSV. Check with:
+**"Dashboard shows 401 / Session expired"**
 
-bash
-head -3 /logs/zeek/conn.log
+- Keycloak token expired. Reload the page — the frontend re-authenticates.
+- If it persists, `docker logs sentinelot-keycloak-1 --tail 20`.
 
-# Should start with `#separator \x09`.
-# If it starts with `{`, edit local.zeek:
-docker exec -u root real-sensor sed -i 's/use_json = T/use_json = F/' /usr/local/zeek/share/zeek/site/local.zeek
+**"Container in restart loop"**
 
-docker restart real-sensor
+- `docker logs <container> --tail 50` — read the actual error.
+- If it's a bridge: `docker restart <container>`. `--init` + inode detection means this should self-heal.
 
+**"Modbus still 0 after clicking Start PLC"**
 
-conn-bridge was running bridge.py, not conn_bridge.py.
+- `docker logs modbus-sim-client --tail 10` — verify it's polling `.9:502` and getting data back.
+- If it says `Connection refused`, OpenPLC's runtime isn't started. Click **Start PLC** in the OpenPLC UI again.
 
-The sentinelot-zeek-bridge image's CMD is bridge.py. Start conn-bridge with:
+**"Too many devices on the dashboard"**
 
-bash
-docker run -d --name conn-bridge --network sentinelot_default \
-  -v ~/sentinelot/zeek-lab/real-sensor/logs:/logs:ro \
-  -v ~/sentinelot/zeek-bridge/conn_bridge.py:/app/conn_bridge.py:ro \
-  sentinelot-zeek-bridge python -u /app/conn_bridge.py
+- Ghosts from prior restarts. One-time cleanup:
 
-2. conn-bridge gets 401 on every POST
+  ```bash
+  docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c \
+    "DELETE FROM assets WHERE id NOT IN (
+       SELECT DISTINCT src_asset_id FROM protocol_events WHERE time > now() - interval '1 hour'
+       UNION SELECT DISTINCT dst_asset_id FROM protocol_events WHERE time > now() - interval '1 hour'
+     ) AND device_role = 'unknown';"
+  ```
 
-sensors table has no row matching the X-Client-Cert-Fingerprint header (dev-test-fingerprint-000). Fix:
+**"WSL / Docker Desktop mount error on bridge start"**
 
-bash
-docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c \
-  "INSERT INTO sensors (id, site_id, label, mtls_cert_fingerprint, status)
-   VALUES ('33333333-3333-3333-3333-333333333333',
-           '22222222-2222-2222-2222-222222222222',
-           'dev-sensor',
-           'dev-test-fingerprint-000',
-           'online')
-   ON CONFLICT (id) DO NOTHING;"
+- `docker rm -f conn-bridge zeek-bridge && bash setup/lab-up.sh`
+- Bridges mount folders now (not single files), so this should be rare.
 
-3. Dashboard shows Keycloak 401 / CORS errors
+---
 
-Realm exists but sslRequired is external and the browser is talking plain HTTP on localhost. Fix:
+## What It Detects
 
-bash
-docker exec sentinelot-keycloak-1 /opt/keycloak/bin/kcadm.sh update realms/sentinelot -s sslRequired=none
+Rules currently shipped in `stream-processor`:
 
-# Then hard-refresh http://localhost:3000 in a private window
-# Login: admin / admin — the dashboard expects a clean session; if you see 401 spam in the console, use a Private/Incognito window on http://localhost:3000 and log in fresh
+- **Industrial protocol activity** — any Modbus/S7/DNP3/OPC-UA traffic from a previously unseen asset
+- **New device on network** — first-seen IP/MAC
+- **Out-of-hours activity** — protocol events between configured off-hours windows
+- **Signature alerts** — Suricata matches (via `/v1/ingest/signature-alerts`)
 
-4. modbus.log stays empty
+Additional detections (rogue-device testing, port-scan, C2 beaconing, write-anomaly) are being added incrementally. See `services/stream-processor/` for the current rule set.
 
-Zeek's Modbus parser must be loaded before the first Modbus packet arrives. Ensure modbus-sim is running before restarting real-sensor:
+---
 
-bash
-docker start modbus-sim
-docker restart real-sensor
+## License
 
-
-Then confirm:
-
-bash
-ls -la ~/sentinelot/zeek-lab/real-sensor/logs/zeek/modbus.log
-
-# Should be > 0 bytes after 30 seconds of modbus-sim-client polling
-
-Ports reference
-Port	Protocol	Container
-3000	HTTP	dashboard-react
-8080	HTTP (Keycloak)	sentinelot-keycloak-1
-8000	HTTP (API)	sentinelot-ingestion-api-1
-8090	HTTP (OpenPLC)	plc-modbus
-11434	HTTP (Ollama)	ollama
-5432	PostgreSQL	sentinelot-postgres-1
-6379	Redis	sentinelot-redis-1
-9092	Kafka	sentinelot-redpanda-1
-102/tcp	S7comm	plc-modbus
-502/tcp	Modbus TCP	modbus-sim (sim), plc-modbus (OpenPLC built-in)
-4840/tcp	OPC UA	plc-modbus (built-in)
-20000/tcp+udp	DNP3	plc-modbus (built-in)
-44818/tcp	EtherNet/IP	not simulated (SoP lists it for real deployment)
-47808/udp	BACnet	not simulated (SoP lists it for real deployment)
+Internal / private.
