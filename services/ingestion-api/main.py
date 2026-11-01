@@ -27,6 +27,7 @@ from site_admin import router as site_admin_router
 from asset_admin import router as asset_admin_router
 from settings_api import router as settings_router
 from sensor_api import router as sensor_router
+from capture_api import router as capture_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sentinelot.ingestion")
 
@@ -44,6 +45,7 @@ app.include_router(site_admin_router)
 app.include_router(asset_admin_router)
 app.include_router(settings_router)
 app.include_router(sensor_router)
+app.include_router(capture_router)
 
 # DEV-ONLY: wide-open CORS so the static dashboard (served from a different
 # origin/port) can call this API directly. Before any real deployment this

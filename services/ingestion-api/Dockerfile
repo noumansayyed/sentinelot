@@ -1,4 +1,5 @@
 FROM python:3.12-slim
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 
 WORKDIR /app
 
@@ -18,6 +19,7 @@ COPY site_admin.py .
 COPY asset_admin.py .
 COPY settings_api.py .
 COPY sensor_api.py .
+COPY capture_api.py .
 
 EXPOSE 8000
 
