@@ -42,6 +42,7 @@ async def list_all_sites(_: dict = Depends(lambda: None)):
                 (SELECT count(*)   FROM alerts          WHERE site_id = s.id AND status = 'open') AS alert_count
             FROM sites s
             WHERE s.tenant_id = $1
+              AND s.archived_at IS NULL
             ORDER BY s.name
             """,
             DEMO_TENANT,
@@ -90,13 +91,16 @@ async def delete_site(site_id: UUID, actor: str = "operator", _: dict = Depends(
                 f"Purge first via Settings → Retention → Purge old events.",
             )
 
-        # Guarded cleanup — same order as manual deletion
-        await pool.execute("DELETE FROM compliance_reports WHERE site_id = $1", site_id)
-        await pool.execute("DELETE FROM report_archive     WHERE site_id = $1", site_id)
-        await pool.execute("DELETE FROM asset_classifications WHERE site_id = $1", site_id)
-        await pool.execute("DELETE FROM enrollment_tokens  WHERE site_id = $1", site_id)
-        await pool.execute("DELETE FROM sensors            WHERE site_id = $1", site_id)
-        await pool.execute("DELETE FROM sites WHERE id = $1", site_id)
+        # Soft-delete: set archived_at instead of removing rows.
+        # Historic events/assets/alerts stay; site disappears from picker.
+        # Sensor subscriptions cascade away so no new events flow.
+        await pool.execute(
+            "UPDATE sites SET archived_at = now(), archived_by = $2, archived_reason = $3 WHERE id = $1",
+            site_id, actor, "deleted via UI",
+        )
+        await pool.execute(
+            "DELETE FROM sensor_site_subscriptions WHERE site_id = $1", site_id,
+        )
 
         await write_audit(
             tenant_id=row["tenant_id"],
@@ -121,6 +125,27 @@ async def create_site(tenant_id: UUID, req: CreateSiteRequest, _: dict = Depends
         site_id = await pool.fetchval(
             "INSERT INTO sites (tenant_id, name) VALUES ($1, $2) RETURNING id",
             tenant_id, req.name
+        )
+
+        # Seed default per-site settings so the site operates predictably
+        # from the moment it is created, without requiring the operator to
+        # visit Settings first.
+        await pool.execute(
+            """
+            INSERT INTO settings (tenant_id, site_id, key, value)
+            SELECT $1, $2, d.key, d.value
+            FROM (
+              VALUES
+                ('detection.off_hours_start',      '"22:00"'::jsonb),
+                ('detection.off_hours_end',        '"06:00"'::jsonb),
+                ('detection.zscore_threshold',     '3.0'::jsonb),
+                ('detection.baseline_min_samples', '30'::jsonb),
+                ('detection.enabled_protocols',    '["modbus_tcp","s7comm","dnp3","opcua"]'::jsonb),
+                ('capture.interface',              '"eth0"'::jsonb),
+                ('retention.events_days',          '30'::jsonb)
+            ) AS d(key, value)
+            """,
+            tenant_id, site_id,
         )
         await write_audit(
             tenant_id=tenant_id,
@@ -216,5 +241,21 @@ async def update_site(site_id: UUID, req: UpdateSiteRequest, _: dict = Depends(l
             details={"old_name": _old_name, "new_name": req.name},
         )
         return {"status": "updated", "name": req.name}
+    finally:
+        await pool.close()
+
+
+@router.post("/v1/sites/{site_id}/restore")
+async def restore_site(site_id: UUID, actor: str = "operator"):
+    """Un-archive a site. Sensors must be re-subscribed."""
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
+    try:
+        result = await pool.execute(
+            "UPDATE sites SET archived_at = NULL, archived_by = NULL, archived_reason = NULL WHERE id = $1 AND archived_at IS NOT NULL",
+            site_id,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(404, "site not found or not archived")
+        return {"ok": True, "id": str(site_id)}
     finally:
         await pool.close()

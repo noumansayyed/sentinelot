@@ -26,6 +26,7 @@ from tenant import router as tenant_router
 from site_admin import router as site_admin_router
 from asset_admin import router as asset_admin_router
 from settings_api import router as settings_router
+from sensor_api import router as sensor_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sentinelot.ingestion")
 
@@ -42,6 +43,7 @@ app.include_router(tenant_router)
 app.include_router(site_admin_router)
 app.include_router(asset_admin_router)
 app.include_router(settings_router)
+app.include_router(sensor_router)
 
 # DEV-ONLY: wide-open CORS so the static dashboard (served from a different
 # origin/port) can call this API directly. Before any real deployment this
@@ -359,6 +361,7 @@ async def update_alert_status(
 @app.get("/v1/audit")
 async def list_audit_route(
     limit: int = 200,
+    site_id: Optional[str] = None,
     actor: Optional[str] = None,
     action: Optional[str] = None,
     target_type: Optional[str] = None,
@@ -367,11 +370,12 @@ async def list_audit_route(
     until: Optional[str] = None,
     q: Optional[str] = None,
 ):
-    """Read the canonical audit trail, newest first, with filters."""
+    """Read the audit trail, newest first, with filters (including site_id)."""
     from db import list_audit
     return await list_audit(
-        limit=limit, actor=actor, action=action, target_type=target_type,
-        target_id=target_id, since=since, until=until, q=q,
+        limit=limit, site_id=site_id, actor=actor, action=action,
+        target_type=target_type, target_id=target_id,
+        since=since, until=until, q=q,
     )
 from report_api import router as report_api_router
 app.include_router(report_api_router)

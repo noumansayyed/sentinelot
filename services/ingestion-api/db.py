@@ -196,6 +196,7 @@ async def write_audit(
 
 async def list_audit(
     limit: int = 200,
+    site_id: Optional[str] = None,
     actor: Optional[str] = None,
     action: Optional[str] = None,
     target_type: Optional[str] = None,
@@ -210,6 +211,7 @@ async def list_audit(
         params.append(value)
         where.append(clause.format(n=len(params)))
 
+    if site_id:     add("site_id::text = ${n}", site_id)
     if actor:       add("actor = ${n}", actor)
     if action:      add("action = ${n}", action)
     if target_type: add("target_type = ${n}", target_type)

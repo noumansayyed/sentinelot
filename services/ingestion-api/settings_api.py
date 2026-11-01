@@ -1,101 +1,117 @@
-"""Settings API — get/update per-tenant config + capture restart."""
+"""Settings API — per-site get/update + capture restart + purge."""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Any
 from uuid import UUID
-import asyncpg, os, subprocess, asyncio
+import asyncpg, os, socket as _socket, json as _json
 
 router = APIRouter()
 DATABASE_URL = os.environ["DATABASE_URL"]
 DEMO_TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
+
 def _clean_value(v):
-    """Strip wrapping quotes/backslashes from string values (data-quality fix)."""
+    """Strip wrapping quotes/backslashes from string values."""
     if isinstance(v, str):
         s = v
-        # Repeatedly strip wrapping quotes and backslashes
         for _ in range(3):
             s2 = s.strip()
             if (s2.startswith('"') and s2.endswith('"')) or (s2.startswith("'") and s2.endswith("'")):
                 s = s2[1:-1]
             else:
                 break
-        return s.replace("\\", "\\").replace('\\"', '"')
+        return s
     return v
-
-
 
 
 class SettingUpdate(BaseModel):
     key: str
     value: Any
+    site_id: UUID | None = None
+
+
+async def _resolve_site(pool, site_id: UUID | None) -> UUID:
+    """If site_id not provided, use the oldest non-archived site."""
+    if site_id is not None:
+        return site_id
+    found = await pool.fetchval(
+        "SELECT id FROM sites WHERE archived_at IS NULL ORDER BY created_at LIMIT 1"
+    )
+    if found is None:
+        raise HTTPException(404, "no active site")
+    return found
 
 
 @router.get("/v1/settings")
-async def get_settings(tenant_id: UUID = DEMO_TENANT):
+async def get_settings(site_id: UUID | None = None):
+    """Return all settings for one site. If site_id is omitted, uses the
+    first non-archived site."""
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
     try:
+        sid = await _resolve_site(pool, site_id)
         rows = await pool.fetch(
-            "SELECT key, value, updated_at FROM settings WHERE tenant_id = $1 ORDER BY key",
-            tenant_id,
+            "SELECT key, value, updated_at FROM settings WHERE site_id = $1 ORDER BY key",
+            sid,
         )
-        return [{"key": r["key"], "value": _clean_value(r["value"]), "updated_at": r["updated_at"].isoformat()} for r in rows]
+        return [
+            {
+                "key": r["key"],
+                "value": _clean_value(r["value"]),
+                "updated_at": r["updated_at"].isoformat(),
+            }
+            for r in rows
+        ]
     finally:
         await pool.close()
 
 
 @router.put("/v1/settings")
-async def update_setting(body: SettingUpdate, tenant_id: UUID = DEMO_TENANT):
+async def update_setting(body: SettingUpdate):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
     try:
-        import json
-        await pool.execute(
-            """INSERT INTO settings (tenant_id, key, value) VALUES ($1, $2, $3::jsonb)
-               ON CONFLICT (tenant_id, key) DO UPDATE
-               SET value = EXCLUDED.value, updated_at = now()""",
-            tenant_id, body.key, json.dumps(body.value),
+        sid = await _resolve_site(pool, body.site_id)
+        tenant_id = await pool.fetchval(
+            "SELECT tenant_id FROM sites WHERE id = $1", sid
         )
-        return {"ok": True, "key": body.key}
+        if tenant_id is None:
+            raise HTTPException(404, "site not found")
+
+        await pool.execute(
+            """INSERT INTO settings (tenant_id, site_id, key, value)
+               VALUES ($1, $2, $3, $4::jsonb)
+               ON CONFLICT (site_id, key) DO UPDATE
+                 SET value = EXCLUDED.value, updated_at = now()""",
+            tenant_id, sid, body.key, _json.dumps(body.value),
+        )
+        return {"ok": True, "key": body.key, "site_id": str(sid)}
     finally:
         await pool.close()
 
 
 @router.get("/v1/settings/interfaces")
 async def list_interfaces():
-    """Return the interfaces available inside the real-sensor container's netns.
-    Hardcoded because:
-      - the sensor's netns is only reachable from the sensor container itself
-      - the realistic set is small and stable (eth0 in the lab, whichever
-        interface the SPAN is on in production)
-      - querying the host and getting "lo" or Docker bridges is misleading
-    Operators override with `capture.interface = <name>`; the sensor recreates
-    with `IFACE=<name>` on next Apply & Restart."""
+    """Static list of interfaces available to the sensor container."""
     return {"interfaces": ["eth0", "eth1", "eth2", "any"]}
 
 
 @router.post("/v1/settings/restart-sensor")
 async def restart_sensor():
-    """Recreate real-sensor so IFACE setting takes effect.
-    Talks to the Docker daemon over its unix socket (mounted into the API
-    container). No `docker` CLI required — uses HTTP-over-unix-socket, which
-    works with the standard `requests-unixsocket` or, here, the raw socket."""
-    import socket as _socket
-    import json as _json
-
-    # 1) Read current interface
+    """Recreate real-sensor with IFACE from current site's settings.
+    Uses Docker unix socket over HTTP, no CLI needed."""
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
     try:
-        row = await pool.fetchrow(
-            "SELECT value FROM settings WHERE tenant_id = $1 AND key = 'capture.interface'",
-            DEMO_TENANT,
+        sid = await _resolve_site(pool, None)
+        iface = await pool.fetchval(
+            "SELECT value FROM settings WHERE site_id = $1 AND key = 'capture.interface'",
+            sid,
         )
-        iface = row["value"] if row else "eth0"
         if isinstance(iface, str):
             iface = iface.strip('"')
+        if not iface:
+            iface = "eth0"
     finally:
         await pool.close()
 
-    # 2) Talk to Docker daemon over unix socket
     SOCK = "/var/run/docker.sock"
 
     def _docker_call(method, path, body=None):
@@ -129,9 +145,7 @@ async def restart_sensor():
         return code, payload
 
     try:
-        # 3) Remove existing (ignore 404)
-        code, _ = _docker_call("DELETE", "/containers/real-sensor?force=true")
-        # 4) Create new with current IFACE
+        _docker_call("DELETE", "/containers/real-sensor?force=true")
         create_body = {
             "Image": "sentinelot-real-sensor",
             "Env": [f"IFACE={iface}"],
@@ -145,11 +159,10 @@ async def restart_sensor():
         code, payload = _docker_call("POST", "/containers/create?name=real-sensor", create_body)
         if code not in (200, 201):
             raise HTTPException(500, f"docker create failed: {code} {payload[:300].decode(errors='replace')}")
-        # 5) Start it
         code, payload = _docker_call("POST", "/containers/real-sensor/start")
         if code not in (204, 304):
             raise HTTPException(500, f"docker start failed: {code} {payload[:300].decode(errors='replace')}")
-        return {"ok": True, "interface": iface, "note": "real-sensor recreated; Zeek needs ~25s to come up"}
+        return {"ok": True, "interface": iface, "note": "real-sensor recreated; Zeek needs ~25s"}
     except HTTPException:
         raise
     except FileNotFoundError:
@@ -159,14 +172,20 @@ async def restart_sensor():
 
 
 @router.post("/v1/settings/purge-events")
-async def purge_events(days: int = 30):
-    """Delete protocol_events older than N days."""
+async def purge_events(days: int = 30, site_id: UUID | None = None):
+    """Delete protocol_events older than N days for one site (or all)."""
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2)
     try:
-        result = await pool.execute(
-            "DELETE FROM protocol_events WHERE time < now() - interval '1 day' * $1",
-            days,
-        )
+        if site_id is None:
+            result = await pool.execute(
+                "DELETE FROM protocol_events WHERE time < now() - interval '1 day' * $1",
+                days,
+            )
+        else:
+            result = await pool.execute(
+                "DELETE FROM protocol_events WHERE site_id = $1 AND time < now() - interval '1 day' * $2",
+                site_id, days,
+            )
         return {"ok": True, "deleted": result}
     finally:
         await pool.close()

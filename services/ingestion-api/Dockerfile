@@ -17,6 +17,7 @@ COPY report_api.py .
 COPY site_admin.py .
 COPY asset_admin.py .
 COPY settings_api.py .
+COPY sensor_api.py .
 
 EXPOSE 8000
 

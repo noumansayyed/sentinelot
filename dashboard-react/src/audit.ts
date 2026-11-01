@@ -21,6 +21,7 @@ export type AuditEntry = {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export type AuditFilters = {
+  site_id?: string;
   q?: string;
   actor?: string;
   action?: string;

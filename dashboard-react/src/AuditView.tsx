@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchAudit, type AuditEntry, type AuditFilters } from "./audit";
+import { useSite } from "./SiteContext";
 
 const ACTION_OPTIONS = [
   "asset.classify", "asset.bulk_classify", "asset.update", "assets.update",
@@ -14,6 +15,7 @@ const TARGET_OPTIONS = [
 ];
 
 export default function AuditView({ card }: { card: React.CSSProperties }) {
+  const { currentSite } = useSite();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<AuditFilters>({});
@@ -42,13 +44,13 @@ export default function AuditView({ card }: { card: React.CSSProperties }) {
     let alive = true;
     setLoading(true);
     (async () => {
-      const log = await fetchAudit(500, filters);
+      const log = await fetchAudit(500, { ...filters, site_id: currentSite?.id });
       if (!alive) return;
       setEntries(log);
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [filters]);
+  }, [filters, currentSite?.id]);
 
   function downloadCSV() {
     const headers = ["Time", "Actor", "Kind", "Target", "Action", "Reason"];

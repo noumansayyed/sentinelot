@@ -17,9 +17,9 @@ from datetime import datetime, timezone
 import time as _t
 _offhrs_seen: dict = {}
 
-async def _offhrs_ok(pool, event: dict) -> bool:
-    # Protocol gate: only alert on protocols enabled in settings.
-    enabled = await _get_setting(pool, "detection.enabled_protocols", ["modbus_tcp", "s7comm", "dnp3", "opcua"])
+async def _offhrs_ok(pool, event: dict, site_id=None) -> bool:
+    # Protocol gate: only alert on protocols enabled in this site's settings.
+    enabled = await _get_setting(pool, "detection.enabled_protocols", ["modbus_tcp", "s7comm", "dnp3", "opcua"], site_id=site_id)
     if isinstance(enabled, str):
         try:
             import json as _jj
@@ -36,10 +36,10 @@ async def _offhrs_ok(pool, event: dict) -> bool:
     _offhrs_seen[k] = now
     return True
 
-async def is_off_hours(pool, ts: datetime) -> bool:
+async def is_off_hours(pool, ts: datetime, site_id=None) -> bool:
     from datetime import timedelta as _td
-    start_str = await _get_setting(pool, "detection.off_hours_start", "22:00")
-    end_str   = await _get_setting(pool, "detection.off_hours_end",   "06:00")
+    start_str = await _get_setting(pool, "detection.off_hours_start", "22:00", site_id=site_id)
+    end_str   = await _get_setting(pool, "detection.off_hours_end",   "06:00", site_id=site_id)
     try:
         sh, sm = [int(x) for x in str(start_str).split(":")]
         eh, em = [int(x) for x in str(end_str).split(":")]
@@ -81,18 +81,41 @@ _settings_cache = {"at": 0.0, "map": {}}
 _SETTINGS_TTL = 2.0
 
 
-async def _get_setting(pool, key, default=None):
-    """Read a setting from DB (cached 10s so we don't hit DB on every event)."""
+async def _get_setting(pool, key, default=None, site_id=None):
+    """Read a per-site setting from DB (cached 2s). If site_id is None,
+    falls back to any row matching the key — used by tests/debug only.
+    All production callers pass site_id."""
     import time as _time
     now = _time.time()
-    if now - _settings_cache["at"] > _SETTINGS_TTL:
+    cache_key = str(site_id) if site_id else "__global__"
+    if now - _settings_cache["at"] > _SETTINGS_TTL or _settings_cache.get("site") != cache_key:
         try:
-            rows = await pool.fetch("SELECT key, value FROM settings WHERE tenant_id = $1", _TENANT)
+            if site_id:
+                rows = await pool.fetch(
+                    "SELECT key, value FROM settings WHERE site_id = $1",
+                    site_id,
+                )
+            else:
+                rows = await pool.fetch(
+                    "SELECT key, value FROM settings ORDER BY updated_at DESC LIMIT 100"
+                )
             _settings_cache["map"] = {r["key"]: r["value"] for r in rows}
             _settings_cache["at"] = now
+            _settings_cache["site"] = cache_key
         except Exception:
             pass
     return _settings_cache["map"].get(key, default)
+
+async def _subscribed_sites(pool, sensor_id):
+    """Return the list of sites this sensor fans out to right now."""
+    if not sensor_id:
+        return []
+    rows = await pool.fetch(
+        "SELECT site_id FROM sensor_site_subscriptions WHERE sensor_id = $1",
+        sensor_id,
+    )
+    return [r["site_id"] for r in rows]
+
 
 
 # How many standard deviations from a device's own normal timing counts
@@ -228,7 +251,7 @@ async def has_prior_write(pool: asyncpg.Pool, site_id: UUID, asset_id: UUID) -> 
 
 async def update_baseline_and_check(
     pool: asyncpg.Pool, asset_id: UUID, ts: datetime,
-) -> tuple[bool, float, float]:
+    site_id=None) -> tuple[bool, float, float]:
     """
     Welford's online algorithm: updates a device's running mean/variance
     of inter-event timing with a single pass, no stored history needed.
@@ -276,8 +299,8 @@ async def update_baseline_and_check(
         mean, m2, count, ts, asset_id,
     )
 
-    min_samples = await _get_setting(pool, "detection.baseline_min_samples", BASELINE_MIN_SAMPLES)
-    zscore_thr  = await _get_setting(pool, "detection.zscore_threshold",    ZSCORE_THRESHOLD)
+    min_samples = await _get_setting(pool, "detection.baseline_min_samples", BASELINE_MIN_SAMPLES, site_id=site_id)
+    zscore_thr  = await _get_setting(pool, "detection.zscore_threshold",    ZSCORE_THRESHOLD,     site_id=site_id)
     try:
         min_samples = int(min_samples)
         zscore_thr  = float(zscore_thr)
@@ -292,29 +315,27 @@ async def update_baseline_and_check(
     return is_anomaly, gap, zscore
 
 
-async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, event: dict) -> None:
+async def _process_one_site(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID,
+                               event: dict, ts, function_code, is_write,
+                               zscore_thr: float, off_hours: bool, offhrs_ok: bool) -> None:
+    """Per-site detection + insertion. Everything inside runs exactly once per
+    (event, site) pair. The shared parsing (ts, function_code, thresholds,
+    off-hours decision) is done by the caller to avoid redundant DB reads."""
     src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"], event["protocol"])
     dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"], event["protocol"], touch_last_seen=False)
 
-    ts = datetime.fromisoformat(event["timestamp"])
-    function_code = event.get("function_code")
-    is_write = is_write_command(function_code)
-
-    # Must check history BEFORE inserting this event, so "prior" truly
-    # means "before now", not including the row we're about to write.
     first_ever_write = False
     if is_write and not is_new:
         first_ever_write = not await has_prior_write(pool, site_id, src_asset_id)
     elif is_write and is_new:
-        # a brand-new device whose very first observed action is a write
         first_ever_write = True
 
-    baseline_anomaly, gap_seconds, zscore = await update_baseline_and_check(pool, src_asset_id, ts)
+    baseline_anomaly, gap_seconds, zscore = await update_baseline_and_check(pool, src_asset_id, ts, site_id=site_id)
 
     await pool.execute(
         """INSERT INTO protocol_events
-               (time, sensor_id, site_id, src_asset_id, dst_asset_id,
-                protocol, function_code, payload_summary, zeek_uid)
+             (time, sensor_id, site_id, src_asset_id, dst_asset_id,
+              protocol, function_code, payload_summary, zeek_uid)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
         ts,
         UUID(event.get("sensor_id")) if event.get("sensor_id") else None,
@@ -330,15 +351,7 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             f"New device seen on network: {event['src_ip']} ({event['protocol']})",
         )
 
-    # Fetch zscore threshold locally for the alert payload (used in the
-    # behavioral-anomaly branch below). Cheap — cached 2s by _get_setting.
-    zscore_thr = await _get_setting(pool, "detection.zscore_threshold", ZSCORE_THRESHOLD)
-    try:
-        zscore_thr = float(zscore_thr)
-    except (TypeError, ValueError):
-        zscore_thr = ZSCORE_THRESHOLD
-
-    if await is_off_hours(pool, ts) and await _offhrs_ok(pool, event):
+    if off_hours and offhrs_ok:
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, "high",
             f"Industrial protocol activity ({event['protocol']}) from {event.get('src_ip') or 'unknown'} observed outside normal hours "
@@ -346,9 +359,8 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
         )
 
     if first_ever_write:
-        _oh = await is_off_hours(pool, ts)
-        off_hours_note = " -- and outside normal working hours" if _oh else ""
-        severity = "critical" if _oh else "high"
+        off_hours_note = " -- and outside normal working hours" if off_hours else ""
+        severity = "critical" if off_hours else "high"
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, severity,
             f"Unauthorized write command detected: {event['src_ip']} sent {function_code} "
@@ -367,6 +379,46 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             evidence={"gap_seconds": gap_seconds, "zscore": zscore,
                       "threshold": zscore_thr, "protocol": event["protocol"]},
         )
+
+
+async def process_event(pool: asyncpg.Pool, tenant_id: UUID, event: dict) -> None:
+    """Fan out one incoming event to every site subscribed to its sensor.
+    Shared parsing (ts, thresholds, off-hours) happens once per event;
+    per-site logic (upsert, insert, alert) runs once per subscribed site."""
+    sensor_id = event.get("sensor_id")
+    site_ids = await _subscribed_sites(pool, sensor_id)
+    if not site_ids:
+        logger.debug("event dropped: no sites subscribed to sensor %s", sensor_id)
+        return
+
+    # ── Shared per-event parsing (do this once) ─────────────────────────
+    ts = datetime.fromisoformat(event["timestamp"])
+    function_code = event.get("function_code")
+    is_write = is_write_command(function_code)
+
+    # ── Shared detection threshold lookups (once per event) ─────────────
+    # NB: settings can differ per site — we can't pre-compute these globally.
+    # Instead, inside the per-site loop we do read the setting per site, but
+    # we cache-close them so it's still cheap (2s cache in _get_setting).
+
+    # ── Per-site fanout ─────────────────────────────────────────────────
+    for site_id in site_ids:
+        # All three reads are site-scoped so each site's settings apply independently.
+        off_hours = await is_off_hours(pool, ts, site_id=site_id)
+        offhrs_ok = await _offhrs_ok(pool, event, site_id=site_id)
+        zscore_thr = await _get_setting(pool, "detection.zscore_threshold", ZSCORE_THRESHOLD, site_id=site_id)
+        try:
+            zscore_thr = float(zscore_thr)
+        except (TypeError, ValueError):
+            zscore_thr = ZSCORE_THRESHOLD
+
+        await _process_one_site(
+            pool, site_id, tenant_id, event,
+            ts, function_code, is_write,
+            zscore_thr, off_hours, offhrs_ok,
+        )
+
+
 
 
 async def run() -> None:
@@ -413,7 +465,7 @@ async def run() -> None:
                     logger.warning("unknown site_id=%s, dropping event", site_id)
                     consumer.commit(msg)
                     continue
-                await process_event(pool, site_id, tenant_row["tenant_id"], event)
+                await process_event(pool, tenant_row["tenant_id"], event)
                 consumer.commit(msg)
             except Exception:
                 logger.exception("failed to process message, skipping")

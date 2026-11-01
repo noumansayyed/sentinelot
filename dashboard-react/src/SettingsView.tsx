@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSite } from "./SiteContext";
 
 const API = "http://localhost:8000";
 
@@ -8,6 +9,7 @@ type SaveState = "idle" | "saving" | "saved" | "failed";
 type SectionState = { status: SaveState; message?: string };
 
 export default function SettingsView({ card }: { card: React.CSSProperties }) {
+  const { currentSite } = useSite();
   const [draft, setDraft] = useState<Record<string, any>>({});
   const [saved, setSaved] = useState<Record<string, any>>({});
   const [interfaces, setInterfaces] = useState<string[]>([]);
@@ -30,7 +32,7 @@ export default function SettingsView({ card }: { card: React.CSSProperties }) {
     setLoading(true);
     try {
       const [s, i] = await Promise.all([
-        fetch(`${API}/v1/settings`).then(r => r.json()),
+        fetch(`${API}/v1/settings?site_id=${currentSite?.id || ""}`).then(r => r.json()),
         fetch(`${API}/v1/settings/interfaces`).then(r => r.json()),
       ]);
       const map: Record<string, any> = {};
@@ -41,7 +43,7 @@ export default function SettingsView({ card }: { card: React.CSSProperties }) {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [currentSite?.id]);
 
   function setField(key: string, value: any) {
     setDraft(d => ({ ...d, [key]: value }));

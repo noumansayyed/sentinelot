@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchAlerts, Alert, actionAlert, fetchPlaybook, Playbook } from "./api";
+import { useSite } from "./SiteContext";
 
 interface Props { card: React.CSSProperties }
 const ACTOR = localStorage.getItem("sot_actor") || "operator";
@@ -30,6 +31,7 @@ function getCategory(desc: string): string {
 }
 
 export default function AlertsView({ card }: Props) {
+  const { currentSite } = useSite();
   const [alerts, setAlerts]   = useState<Alert[]>([]);
   const [filter, setFilter]   = useState<"open" | "all">("open");
   const [category, setCategory] = useState<string>("All");
@@ -49,10 +51,11 @@ export default function AlertsView({ card }: Props) {
     } catch (e: any) { setErr(e.message); }
   }
   useEffect(() => {
+    setAlerts([]);          // clear stale data from previous site
     refresh();
     const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
-  }, []);
+  }, [currentSite?.id]);    // ← refetch + reset when site changes
 
   useEffect(() => {
     if (detail) {

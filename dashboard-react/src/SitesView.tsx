@@ -29,6 +29,9 @@ export default function SitesView({ card }: { card: React.CSSProperties }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [sensorsBySite, setSensorsBySite] = useState<Record<string, any[]>>({});
+  const [availableSensors, setAvailableSensors] = useState<Record<string, any[]>>({});
+  const [showEnrollFor, setShowEnrollFor] = useState<string | null>(null);
 
   // create / rename
   const [showCreate, setShowCreate] = useState(false);
@@ -51,7 +54,61 @@ export default function SitesView({ card }: { card: React.CSSProperties }) {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  async function fetchSensors(siteId: string) {
+    try {
+      const [subscribed, available] = await Promise.all([
+        fetch(`${API}/v1/sites/${siteId}/sensors`).then(r => r.json()),
+        fetch(`${API}/v1/sites/${siteId}/sensors/available`).then(r => r.json()),
+      ]);
+      setSensorsBySite(s => ({ ...s, [siteId]: subscribed.sensors || [] }));
+      setAvailableSensors(s => ({ ...s, [siteId]: available.sensors || [] }));
+    } catch (e) {
+      console.error("fetchSensors", e);
+    }
+  }
+
+  async function enrollSensor(siteId: string, sensorId: string) {
+    setBusy(`enroll-${siteId}`);
+    try {
+      const r = await fetch(`${API}/v1/sites/${siteId}/sensors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sensor_id: sensorId, actor: "admin" }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setShowEnrollFor(null);
+      await fetchSensors(siteId);
+    } catch (e: any) {
+      setError(String(e.message || e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function unsubscribeSensor(siteId: string, sensorId: string) {
+    if (!confirm("Unsubscribe this sensor from this site? Existing data stays, new events stop.")) return;
+    setBusy(`unsub-${siteId}-${sensorId}`);
+    try {
+      const r = await fetch(`${API}/v1/sites/${siteId}/sensors/${sensorId}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(await r.text());
+      await fetchSensors(siteId);
+    } catch (e: any) {
+      setError(String(e.message || e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  // Fetch sensors for each site once rows load
+  useEffect(() => {
+    rows.forEach(r => {
+      if (!sensorsBySite[r.id]) fetchSensors(r.id);
+    });
+  }, [rows]);
 
   async function createSite() {
     if (!newName.trim()) return;
@@ -225,6 +282,78 @@ export default function SitesView({ card }: { card: React.CSSProperties }) {
               <div><span style={{ color: "var(--text-3)" }}>Events:</span> {r.event_count.toLocaleString()}</div>
               <div><span style={{ color: "var(--text-3)" }}>Assets:</span> {r.asset_count.toLocaleString()}</div>
               <div><span style={{ color: "var(--text-3)" }}>Open alerts:</span> {r.alert_count.toLocaleString()}</div>
+            </div>
+
+            {/* Sensors section */}
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--hairline-soft)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)",
+                  textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Sensors ({(sensorsBySite[r.id] || []).length})
+                </div>
+                {showEnrollFor === r.id ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select
+                      defaultValue=""
+                      onChange={e => { if (e.target.value) enrollSensor(r.id, e.target.value); }}
+                      style={{ padding: "4px 8px", fontSize: 12, borderRadius: 6,
+                        border: "1px solid var(--hairline)", background: "var(--bg-1)",
+                        color: "var(--text-1)" }}
+                    >
+                      <option value="">— pick sensor —</option>
+                      {(availableSensors[r.id] || []).map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.label} ({s.status})
+                        </option>
+                      ))}
+                    </select>
+                    <button className="btn" onClick={() => setShowEnrollFor(null)}
+                      style={{ padding: "4px 10px", fontSize: 11 }}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button className="btn" onClick={() => setShowEnrollFor(r.id)}
+                    disabled={busy === `enroll-${r.id}`}
+                    style={{ padding: "4px 10px", fontSize: 11 }}>
+                    + Enroll sensor
+                  </button>
+                )}
+              </div>
+              {(sensorsBySite[r.id] || []).length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--text-3)", padding: "4px 0" }}>
+                  No sensors subscribed. New events will not reach this site until one is enrolled.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(sensorsBySite[r.id] || []).map(s => (
+                    <div key={s.id} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "6px 10px", borderRadius: 6, background: "var(--bg-2)",
+                      fontSize: 12, border: "1px solid var(--hairline-soft)",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{
+                          width: 8, height: 8, borderRadius: 999,
+                          background: s.status === "online" ? "#22c55e" : "#9ca3af",
+                        }} />
+                        <span style={{ fontWeight: 600 }}>{s.label}</span>
+                        <code style={{ color: "var(--text-3)" }}>{s.mtls_cert_fingerprint?.slice(0, 16)}…</code>
+                        {s.subscribed_at && (
+                          <span style={{ color: "var(--text-3)" }}>· {fmtRel(s.subscribed_at)}</span>
+                        )}
+                      </div>
+                      <button className="btn"
+                        onClick={() => unsubscribeSensor(r.id, s.id)}
+                        disabled={busy === `unsub-${r.id}-${s.id}`}
+                        style={{ padding: "3px 8px", fontSize: 10,
+                          borderColor: "#ef4444", color: "#ef4444" }}>
+                        {busy === `unsub-${r.id}-${s.id}` ? "…" : "Unsubscribe"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {hasData && (

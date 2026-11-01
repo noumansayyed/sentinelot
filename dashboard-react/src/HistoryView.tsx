@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { fetchAlerts, Alert } from "./api";
 import { REGISTRY, HAS_REG, isKnown } from "./api";
+import { useSite } from "./SiteContext";
 
 export default function HistoryView({ card }: { card: React.CSSProperties }) {
+  const { currentSite } = useSite();
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useEffect(() => {
+    setAlerts([]);
     fetchAlerts().then(setAlerts).catch(() => setAlerts([]));
-  }, []);
+  }, [currentSite?.id]);
 
   const bySeverity: Record<string, number> = {};
   alerts.forEach(a => { bySeverity[a.severity] = (bySeverity[a.severity] || 0) + 1; });
