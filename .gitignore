@@ -27,3 +27,4 @@ reports/*.html
 !reports/.gitkeep
 dashboard-react/node_modules/
 *.bak-*
+ollama-models/

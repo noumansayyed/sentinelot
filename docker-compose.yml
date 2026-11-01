@@ -46,10 +46,12 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
     restart: unless-stopped
-    command: ["start-dev"]
+    command: ["start-dev", "--import-realm"]
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./setup/keycloak-realm.json:/opt/keycloak/data/import/keycloak-realm.json:ro
     ports:
       - "8080:8080"
 
