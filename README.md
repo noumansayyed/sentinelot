@@ -215,7 +215,6 @@ Optional: `MINIO_ROOT_USER`. See `.env.example`.
 | `docker-compose.yml` | Core stack: postgres, redis, redpanda, keycloak, ingestion-api, stream-processor |
 | `setup/lab-up.sh` | Idempotent full-lab bring-up (core stack + lab). Safe to re-run |
 | `setup/restart.sh` | Full stop (`docker compose down` + stop lab) then start via `lab-up.sh` |
-| `setup/verify.sh` | One-command health check |
 | `setup/audit_triggers.sql` | DB triggers that auto-log every mutation to `audit_log` |
 | `services/ingestion-api/` | FastAPI ingestion + REST API |
 | `services/stream-processor/` | Kafka consumer, detection rules, asset upsert |
