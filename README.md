@@ -60,31 +60,6 @@ cd ~/sentinelot
 bash setup/lab-up.sh
 ```
 
-**Check the whole stack in 5 seconds:**
-
-```bash
-cd ~/sentinelot
-
-bash setup/verify.sh 2>/dev/null || {
-  echo "=== containers ==="; docker ps --format '{{.Names}}\t{{.Status}}' | sort
-  echo "=== health ==="; curl -s http://localhost:8000/health/components | python3 -m json.tool
-  echo "=== protocol events (last 2 min) ==="
-  docker exec sentinelot-postgres-1 psql -U sentinelot -d sentinelot -c \
-    "SELECT protocol, count(*) FROM protocol_events WHERE time > now() - interval '2 minutes' GROUP BY 1 ORDER BY 2 DESC;"
-}
-```
-
-**Logs** — one command per service:
-
-```bash
-docker logs -f zeek-bridge       # Modbus flow
-docker logs -f conn-bridge       # TCP connections (S7, DNP3, OPC-UA)
-docker logs -f real-sensor       # Zeek engine
-docker logs -f sentinelot-stream-processor-1    # detection rules
-docker logs -f sentinelot-ingestion-api-1       # API requests
-docker logs -f llm-triage        # LLM playbooks
-```
-
 **Stop everything cleanly:**
 
 ```bash
