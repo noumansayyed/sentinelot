@@ -31,7 +31,7 @@ async def _offhrs_ok(pool, event: dict, site_id=None) -> bool:
     # Per-asset-per-protocol throttle: 15-minute cooldown (unchanged behaviour).
     k = (event.get("protocol"), str(event.get("src_ip") or event.get("asset_id") or ""))
     now = _t.time()
-    if now - _offhrs_seen.get(k, 0) < 900:
+    if now - _offhrs_seen.get(k, 0) < 120:   # 2 minutes, was 15
         return False
     _offhrs_seen[k] = now
     return True
@@ -324,11 +324,23 @@ async def _process_one_site(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID,
     src_asset_id, is_new = await upsert_asset(pool, site_id, event["src_ip"], event["protocol"])
     dst_asset_id, _ = await upsert_asset(pool, site_id, event["dst_ip"], event["protocol"], touch_last_seen=False)
 
+    # Alert on write only if there's no prior write from this asset+protocol
+    # in the last hour, EXCLUDING the current event (uid match).
     first_ever_write = False
-    if is_write and not is_new:
-        first_ever_write = not await has_prior_write(pool, site_id, src_asset_id)
-    elif is_write and is_new:
-        first_ever_write = True
+    if is_write:
+        current_uid = event.get("zeek_uid") or ""
+        recent = await pool.fetchval(
+            """SELECT EXISTS(
+                 SELECT 1 FROM protocol_events
+                 WHERE site_id = $1 AND src_asset_id = $2 AND protocol = $3
+                   AND function_code IN ('WRITE_SINGLE_REGISTER','WRITE_MULTIPLE_REGISTERS',
+                                          'WRITE_COIL','WRITE_MULTIPLE_COILS')
+                   AND time > now() - interval '1 hour'
+                   AND COALESCE(zeek_uid, '') <> $4
+            )""",
+            site_id, src_asset_id, event["protocol"], current_uid,
+        )
+        first_ever_write = not recent
 
     baseline_anomaly, gap_seconds, zscore = await update_baseline_and_check(pool, src_asset_id, ts, site_id=site_id)
 
@@ -352,8 +364,10 @@ async def _process_one_site(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID,
         )
 
     if off_hours and offhrs_ok:
+        # Inside off-hours window → critical; outside → high
+        _oh_sev = "critical" if off_hours else "high"
         await insert_alert(
-            pool, tenant_id, site_id, src_asset_id, "high",
+            pool, tenant_id, site_id, src_asset_id, _oh_sev,
             f"Industrial protocol activity ({event['protocol']}) from {event.get('src_ip') or 'unknown'} observed outside normal hours "
             f"at {ts.isoformat()}",
         )
@@ -364,7 +378,7 @@ async def _process_one_site(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID,
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, severity,
             f"Unauthorized write command detected: {event['src_ip']} sent {function_code} "
-            f"to {event['dst_ip']} -- this device has only been observed reading until now"
+            f"to {event['dst_ip']} -- no write activity from this device in the past hour"
             f"{off_hours_note}.",
             evidence={"function_code": function_code, "dst_ip": event["dst_ip"],
                       "src_ip": event["src_ip"], "protocol": event["protocol"]},

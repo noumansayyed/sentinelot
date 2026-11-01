@@ -8,8 +8,14 @@ export function getSiteId(): string {
   return id;
 }
 let token: string | null = null;
+let tokenExpiresAt: number = 0;
+
 export async function getToken(force = false): Promise<string> {
-  if (token && !force) return token;
+  const now = Date.now();
+  // Refresh if forced, missing, or expiring within the next 30 seconds
+  if (!force && token && now < tokenExpiresAt - 30_000) {
+    return token;
+  }
   const res = await fetch(`${KEYCLOAK_URL}/realms/sentinelot/protocol/openid-connect/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -17,6 +23,9 @@ export async function getToken(force = false): Promise<string> {
   });
   const data = await res.json();
   token = data.access_token;
+  // expires_in is in seconds (typically 300 for Keycloak default)
+  const expiresIn = Number(data.expires_in || 300);
+  tokenExpiresAt = now + expiresIn * 1000;
   return token!;
 }
 async function authed(url: string, init: RequestInit = {}): Promise<Response> {
