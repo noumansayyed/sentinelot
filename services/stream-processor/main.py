@@ -17,7 +17,18 @@ from datetime import datetime, timezone
 import time as _t
 _offhrs_seen: dict = {}
 
-def _offhrs_ok(event: dict) -> bool:
+async def _offhrs_ok(pool, event: dict) -> bool:
+    # Protocol gate: only alert on protocols enabled in settings.
+    enabled = await _get_setting(pool, "detection.enabled_protocols", ["modbus_tcp", "s7comm", "dnp3", "opcua"])
+    if isinstance(enabled, str):
+        try:
+            import json as _jj
+            enabled = _jj.loads(enabled)
+        except Exception:
+            enabled = []
+    if event.get("protocol") not in (enabled or []):
+        return False
+    # Per-asset-per-protocol throttle: 15-minute cooldown (unchanged behaviour).
     k = (event.get("protocol"), str(event.get("src_ip") or event.get("asset_id") or ""))
     now = _t.time()
     if now - _offhrs_seen.get(k, 0) < 900:
@@ -25,10 +36,24 @@ def _offhrs_ok(event: dict) -> bool:
     _offhrs_seen[k] = now
     return True
 
-def is_off_hours(ts: datetime) -> bool:
+async def is_off_hours(pool, ts: datetime) -> bool:
     from datetime import timedelta as _td
+    start_str = await _get_setting(pool, "detection.off_hours_start", "22:00")
+    end_str   = await _get_setting(pool, "detection.off_hours_end",   "06:00")
+    try:
+        sh, sm = [int(x) for x in str(start_str).split(":")]
+        eh, em = [int(x) for x in str(end_str).split(":")]
+    except Exception:
+        sh, sm, eh, em = 22, 0, 6, 0
     local_hour = ts.astimezone(timezone(_td(hours=5, minutes=30))).hour
-    return local_hour < 6 or local_hour >= 22
+    local_min = ts.astimezone(timezone(_td(hours=5, minutes=30))).minute
+    now_m = local_hour * 60 + local_min
+    start_m = sh * 60 + sm
+    end_m = eh * 60 + em
+    if start_m <= end_m:
+        return start_m <= now_m < end_m
+    # Window crosses midnight (e.g. 22:00 → 06:00)
+    return now_m >= start_m or now_m < end_m
 
 from uuid import UUID, uuid4
 
@@ -46,6 +71,30 @@ TOPIC = "protocol-events"
 # it -- avoids false positives from a device's first few, still-settling
 # observations.
 BASELINE_MIN_SAMPLES = 30
+
+# ── Runtime settings from DB ────────────────────────────────────────────
+import json as _json
+from uuid import UUID as _UUID
+
+_TENANT = _UUID("11111111-1111-1111-1111-111111111111")
+_settings_cache = {"at": 0.0, "map": {}}
+_SETTINGS_TTL = 2.0
+
+
+async def _get_setting(pool, key, default=None):
+    """Read a setting from DB (cached 10s so we don't hit DB on every event)."""
+    import time as _time
+    now = _time.time()
+    if now - _settings_cache["at"] > _SETTINGS_TTL:
+        try:
+            rows = await pool.fetch("SELECT key, value FROM settings WHERE tenant_id = $1", _TENANT)
+            _settings_cache["map"] = {r["key"]: r["value"] for r in rows}
+            _settings_cache["at"] = now
+        except Exception:
+            pass
+    return _settings_cache["map"].get(key, default)
+
+
 # How many standard deviations from a device's own normal timing counts
 # as a genuine anomaly. 3 is the conventional statistical threshold for
 # "significant deviation" (Chebyshev/normal-distribution heuristic).
@@ -227,9 +276,17 @@ async def update_baseline_and_check(
         mean, m2, count, ts, asset_id,
     )
 
+    min_samples = await _get_setting(pool, "detection.baseline_min_samples", BASELINE_MIN_SAMPLES)
+    zscore_thr  = await _get_setting(pool, "detection.zscore_threshold",    ZSCORE_THRESHOLD)
+    try:
+        min_samples = int(min_samples)
+        zscore_thr  = float(zscore_thr)
+    except (TypeError, ValueError):
+        min_samples, zscore_thr = BASELINE_MIN_SAMPLES, ZSCORE_THRESHOLD
+
     is_anomaly = (
-        count > BASELINE_MIN_SAMPLES
-        and abs(zscore) > ZSCORE_THRESHOLD
+        count > min_samples
+        and abs(zscore) > zscore_thr
         and gap < 21600  # 6h: longer gaps = lab downtime, not event of interest
     )
     return is_anomaly, gap, zscore
@@ -273,7 +330,15 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             f"New device seen on network: {event['src_ip']} ({event['protocol']})",
         )
 
-    if is_off_hours(ts) and _offhrs_ok(event) and event["protocol"] in ("modbus_tcp", "dnp3", "s7comm"):
+    # Fetch zscore threshold locally for the alert payload (used in the
+    # behavioral-anomaly branch below). Cheap — cached 2s by _get_setting.
+    zscore_thr = await _get_setting(pool, "detection.zscore_threshold", ZSCORE_THRESHOLD)
+    try:
+        zscore_thr = float(zscore_thr)
+    except (TypeError, ValueError):
+        zscore_thr = ZSCORE_THRESHOLD
+
+    if await is_off_hours(pool, ts) and await _offhrs_ok(pool, event):
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, "high",
             f"Industrial protocol activity ({event['protocol']}) from {event.get('src_ip') or 'unknown'} observed outside normal hours "
@@ -281,8 +346,9 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
         )
 
     if first_ever_write:
-        off_hours_note = " -- and outside normal working hours" if is_off_hours(ts) else ""
-        severity = "critical" if is_off_hours(ts) else "high"
+        _oh = await is_off_hours(pool, ts)
+        off_hours_note = " -- and outside normal working hours" if _oh else ""
+        severity = "critical" if _oh else "high"
         await insert_alert(
             pool, tenant_id, site_id, src_asset_id, severity,
             f"Unauthorized write command detected: {event['src_ip']} sent {function_code} "
@@ -297,9 +363,9 @@ async def process_event(pool: asyncpg.Pool, site_id: UUID, tenant_id: UUID, even
             pool, tenant_id, site_id, src_asset_id, "medium",
             f"Behavioral anomaly: {event['src_ip']} request timing deviates sharply from its "
             f"own established baseline (gap={gap_seconds:.2f}s, z-score={zscore:.1f}, "
-            f"threshold={ZSCORE_THRESHOLD}).",
+            f"threshold={zscore_thr}).",
             evidence={"gap_seconds": gap_seconds, "zscore": zscore,
-                      "threshold": ZSCORE_THRESHOLD, "protocol": event["protocol"]},
+                      "threshold": zscore_thr, "protocol": event["protocol"]},
         )
 
 

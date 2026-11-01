@@ -1,6 +1,12 @@
 const API_BASE = "http://localhost:8000";
 const KEYCLOAK_URL = "http://localhost:8080";
-export const SITE_ID = "22222222-2222-2222-2222-222222222222";
+// Site ID now comes from SiteContext (localStorage). This helper returns
+// the currently selected site ID or throws if none is selected.
+export function getSiteId(): string {
+  const id = localStorage.getItem("sot_site_id");
+  if (!id) throw new Error("No site selected");
+  return id;
+}
 let token: string | null = null;
 export async function getToken(force = false): Promise<string> {
   if (token && !force) return token;
@@ -32,12 +38,12 @@ export interface Asset {
   first_seen: string; last_seen: string; protocols: string[];
 }
 export async function fetchAlerts(): Promise<Alert[]> {
-  const res = await authed(`${API_BASE}/v1/sites/${SITE_ID}/alerts`);
+  const res = await authed(`${API_BASE}/v1/sites/${getSiteId()}/alerts`);
   if (!res.ok) throw new Error(`alerts HTTP ${res.status}`);
   return (await res.json()).alerts || [];
 }
 export async function fetchAssets(): Promise<Asset[]> {
-  const res = await authed(`${API_BASE}/v1/sites/${SITE_ID}/assets`);
+  const res = await authed(`${API_BASE}/v1/sites/${getSiteId()}/assets`);
   if (!res.ok) throw new Error(`assets HTTP ${res.status}`);
   return (await res.json()).assets || [];
 }
@@ -64,7 +70,7 @@ export interface ProtocolActivity {
   by_protocol: Record<string, ProtocolActivityEntry[]>;
 }
 export async function fetchProtocolActivity(windowSec = 300): Promise<ProtocolActivity> {
-  const res = await authed(`${API_BASE}/v1/sites/${SITE_ID}/protocols/activity?window_sec=${windowSec}`);
+  const res = await authed(`${API_BASE}/v1/sites/${getSiteId()}/protocols/activity?window_sec=${windowSec}`);
   if (!res.ok) throw new Error(`protocols HTTP ${res.status}`);
   return await res.json();
 }
@@ -106,7 +112,7 @@ export interface Operations {
   protocols: OpProtocol[];
   alert_summary: OpAlertSummary;
 }
-export async function fetchOperations(siteId: string = SITE_ID): Promise<Operations> {
+export async function fetchOperations(siteId: string = getSiteId()): Promise<Operations> {
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/operations`);
   if (!res.ok) throw new Error(`operations HTTP ${res.status}`);
   return await res.json();
@@ -219,7 +225,7 @@ export interface InboxAsset {
   last_seen: string | null;
   reason: "unclassified" | "stale" | "attention";
 }
-export async function fetchAssetInbox(siteId: string = SITE_ID): Promise<InboxAsset[]> {
+export async function fetchAssetInbox(siteId: string = getSiteId()): Promise<InboxAsset[]> {
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/assets/inbox`);
   if (!res.ok) throw new Error(`inbox HTTP ${res.status}`);
   return (await res.json()).inbox || [];
@@ -325,11 +331,11 @@ export interface ReportMeta {
   triggered_by: string;
   file_path: string;
 }
-export async function generateReport(siteId: string = SITE_ID): Promise<void> {
+export async function generateReport(siteId: string = getSiteId()): Promise<void> {
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/reports/generate`, { method: "POST" });
   if (!res.ok) throw new Error(await res.text());
 }
-export async function listReports(siteId: string = SITE_ID): Promise<ReportMeta[]> {
+export async function listReports(siteId: string = getSiteId()): Promise<ReportMeta[]> {
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/reports`);
   if (!res.ok) throw new Error(await res.text());
   return (await res.json()).reports || [];
@@ -343,7 +349,7 @@ export interface ReportData {
   alerts: any[];
   events: any[];
 }
-export async function fetchReportData(siteId: string = SITE_ID): Promise<ReportData> {
+export async function fetchReportData(siteId: string = getSiteId()): Promise<ReportData> {
   const res = await authed(`${API_BASE}/v1/sites/${siteId}/report-data`);
   if (!res.ok) throw new Error(`report HTTP ${res.status}`);
   return await res.json();
@@ -353,7 +359,7 @@ export interface SiteInfo { id: string; name: string }
 
 export async function fetchSites(): Promise<SiteInfo[]> {
   const res = await authed(`http://localhost:8000/v1/tenants/11111111-1111-1111-1111-111111111111/sites`);
-  if (!res.ok) return [{id: SITE_ID, name: "Pune Pilot Plant"}];
+  if (!res.ok) return [];
   return (await res.json()).sites || [];
 }
 

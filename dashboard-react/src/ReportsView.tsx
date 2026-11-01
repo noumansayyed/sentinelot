@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getSiteId } from "./api";
 
 export default function ReportsView({ card }: { card: React.CSSProperties }) {
   const [data, setData] = useState<any>(null);
@@ -17,7 +18,7 @@ export default function ReportsView({ card }: { card: React.CSSProperties }) {
     setEmpty(false);
     setData(null);
     try {
-      const res = await fetch(`http://localhost:8000/v1/sites/22222222-2222-2222-2222-222222222222/reports/generate`, {
+      const res = await fetch(`http://localhost:8000/v1/sites/${getSiteId()}/reports/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

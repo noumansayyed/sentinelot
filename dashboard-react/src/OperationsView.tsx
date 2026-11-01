@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { getToken, isKnown } from "./api";
 import {
   fetchOperations, Operations, OpDevice,
-  fetchAssetInbox, classifyAsset, bulkClassify, InboxAsset, SITE_ID,
+  fetchAssetInbox, classifyAsset, bulkClassify, InboxAsset, getSiteId,
 } from "./api";
 import RowActions from "./RowActions";
 import NumberRoll from "./NumberRoll";
@@ -73,7 +73,8 @@ export default function OperationsView({ card }: Props) {
 
   async function refresh() {
     try {
-      const [o, ib] = await Promise.all([fetchOperations(SITE_ID), fetchAssetInbox(SITE_ID)]);
+      const sid = getSiteId();
+      const [o, ib] = await Promise.all([fetchOperations(sid), fetchAssetInbox(sid)]);
       setOps(o); setInbox(ib);
       setLast(new Date().toLocaleTimeString());
       setErr("");
